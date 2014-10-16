@@ -24,6 +24,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #if SDL_VERSION_ATLEAST(2,0,0)
 #include "SDLHardwareRenderDevice.h"
+#include "OpenGLRenderDevice.h"
 #endif
 
 RenderDevice* getRenderDevice(std::string name) {
@@ -39,6 +40,6 @@ RenderDevice* getRenderDevice(std::string name) {
 		}
 	}
 	else {
-		return new SDLSoftwareRenderDevice();
+		return new OpenGLRenderDevice();
 	}
 }
