@@ -41,5 +41,6 @@ RenderDevice* getRenderDevice(std::string name) {
 	}
 	else {
 		return new OpenGLRenderDevice();
+		//return new SDLSoftwareRenderDevice();
 	}
 }
