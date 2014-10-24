@@ -663,8 +663,8 @@ bool MenuInventory::buy(ItemStack stack, int tab) {
  * Similar to sell(), but for use with stash
  */
 bool MenuInventory::stashAdd(ItemStack stack) {
-	// items that have no price cannot be stored
-	if (items->items[stack.item].price == 0) return false;
+	// quest items can not be stored
+	if (items->items[stack.item].type == "quest") return false;
 
 	drag_prev_src = -1;
 	return true;
@@ -722,18 +722,31 @@ bool MenuInventory::isItemEquipped(int item) {
  * Check requirements on an item
  */
 bool MenuInventory::requirementsMet(int item) {
-	if (items->items[item].req_stat == REQUIRES_PHYS) {
-		return (stats->get_physical() >= items->items[item].req_val);
+	// base stats
+	for (unsigned i=0; i < items->items[item].req_stat.size(); ++i) {
+		if (items->items[item].req_stat[i] == REQUIRES_PHYS) {
+			if (stats->get_physical() < items->items[item].req_val[i])
+				return false;
+		}
+		if (items->items[item].req_stat[i] == REQUIRES_MENT) {
+			if (stats->get_mental() < items->items[item].req_val[i])
+				return false;
+		}
+		if (items->items[item].req_stat[i] == REQUIRES_OFF) {
+			if (stats->get_offense() < items->items[item].req_val[i])
+				return false;
+		}
+		if (items->items[item].req_stat[i] == REQUIRES_DEF) {
+			if (stats->get_defense() < items->items[item].req_val[i])
+				return false;
+		}
 	}
-	else if (items->items[item].req_stat == REQUIRES_MENT) {
-		return (stats->get_mental() >= items->items[item].req_val);
+
+	// class
+	if (items->items[item].requires_class != "" && items->items[item].requires_class != stats->character_class) {
+		return false;
 	}
-	else if (items->items[item].req_stat == REQUIRES_OFF) {
-		return (stats->get_offense() >= items->items[item].req_val);
-	}
-	else if (items->items[item].req_stat == REQUIRES_DEF) {
-		return (stats->get_defense() >= items->items[item].req_val);
-	}
+
 	// otherwise there is no requirement, so it is usable.
 	return true;
 }
