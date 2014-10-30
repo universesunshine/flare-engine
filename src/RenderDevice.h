@@ -129,6 +129,7 @@ private:
 #if SDL_VERSION_ATLEAST(2,0,0)
 	friend class SDLHardwareImage;
 #endif
+	friend class OpenGLImage;
 
 private:
 	RenderDevice *device;
