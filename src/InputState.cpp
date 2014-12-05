@@ -109,6 +109,8 @@ void InputState::defaultQwertyKeyBindings () {
 	binding_alt[SHIFT] = SDLK_RSHIFT;
 	binding[DEL] = SDLK_DELETE;
 	binding_alt[DEL] = SDLK_BACKSPACE;
+	binding[ALT] = SDLK_LALT;
+	binding_alt[ALT] = SDLK_RALT;
 
 	binding[ACTIONBAR] = binding_alt[ACTIONBAR] = SDLK_b;
 	binding[ACTIONBAR_BACK] = binding_alt[ACTIONBAR_BACK] = SDLK_z;
@@ -184,6 +186,7 @@ void InputState::loadKeyBindings() {
 		else if (infile.key == "log") cursor = LOG;
 		else if (infile.key == "ctrl") cursor = CTRL;
 		else if (infile.key == "shift") cursor = SHIFT;
+		else if (infile.key == "alt") cursor = ALT;
 		else if (infile.key == "delete") cursor = DEL;
 		else if (infile.key == "actionbar") cursor = ACTIONBAR;
 		else if (infile.key == "actionbar_back") cursor = ACTIONBAR_BACK;
@@ -234,6 +237,7 @@ void InputState::saveKeyBindings() {
 		outfile << "log=" << binding[LOG] << "," << binding_alt[LOG] << "," << binding_joy[LOG] << "\n";
 		outfile << "ctrl=" << binding[CTRL] << "," << binding_alt[CTRL] << "," << binding_joy[CTRL] << "\n";
 		outfile << "shift=" << binding[SHIFT] << "," << binding_alt[SHIFT] << "," << binding_joy[SHIFT] << "\n";
+		outfile << "alt=" << binding[ALT] << "," << binding_alt[ALT] << "," << binding_joy[ALT] << "\n";
 		outfile << "delete=" << binding[DEL] << "," << binding_alt[DEL] << "," << binding_joy[DEL] << "\n";
 		outfile << "actionbar=" << binding[ACTIONBAR] << "," << binding_alt[ACTIONBAR] << "," << binding_joy[ACTIONBAR] << "\n";
 		outfile << "actionbar_back=" << binding[ACTIONBAR_BACK] << "," << binding_alt[ACTIONBAR_BACK] << "," << binding_joy[ACTIONBAR_BACK] << "\n";
@@ -251,9 +255,9 @@ void InputState::saveKeyBindings() {
 void InputState::handle(bool dump_event) {
 	SDL_Event event;
 
-#ifndef __ANDROID__
-	SDL_GetMouseState(&mouse.x, &mouse.y);
-#endif
+	if (! SDL_VERSION_ATLEAST(2,0,0)) {
+		SDL_GetMouseState(&mouse.x, &mouse.y);
+	}
 
 	inkeys = "";
 
@@ -304,6 +308,11 @@ void InputState::handle(bool dump_event) {
 		switch (event.type) {
 
 #if SDL_VERSION_ATLEAST(2,0,0)
+#ifndef __ANDROID__
+			case SDL_MOUSEMOTION:
+				mouse.x = event.motion.x;
+				mouse.y = event.motion.y;
+				break;
 			case SDL_MOUSEWHEEL:
 				if (event.wheel.y > 0) {
 					scroll_up = true;
@@ -312,6 +321,8 @@ void InputState::handle(bool dump_event) {
 				}
 				break;
 			case SDL_MOUSEBUTTONDOWN:
+				mouse.x = event.button.x;
+				mouse.y = event.button.y;
 				for (int key=0; key<key_count; key++) {
 					if (event.button.button == binding[key] || event.button.button == binding_alt[key]) {
 						pressing[key] = true;
@@ -320,6 +331,8 @@ void InputState::handle(bool dump_event) {
 				}
 				break;
 			case SDL_MOUSEBUTTONUP:
+				mouse.x = event.button.x;
+				mouse.y = event.button.y;
 				for (int key=0; key<key_count; key++) {
 					if (event.button.button == binding[key] || event.button.button == binding_alt[key]) {
 						un_press[key] = true;
@@ -327,6 +340,7 @@ void InputState::handle(bool dump_event) {
 				}
 				last_button = event.button.button;
 				break;
+#endif
 			// Android touch events
 			case SDL_FINGERMOTION:
 				mouse.x = (int)((event.tfinger.x + event.tfinger.dx) * VIEW_W);
@@ -742,12 +756,13 @@ void InputState::setKeybindNames() {
 	binding_name[21] = msg->get("Main2");
 	binding_name[22] = msg->get("Ctrl");
 	binding_name[23] = msg->get("Shift");
-	binding_name[24] = msg->get("Delete");
-	binding_name[25] = msg->get("ActionBar Accept");
-	binding_name[26] = msg->get("ActionBar Left");
-	binding_name[27] = msg->get("ActionBar Right");
-	binding_name[28] = msg->get("ActionBar Use");
-	binding_name[29] = msg->get("Developer Menu");
+	binding_name[24] = msg->get("Alt");
+	binding_name[25] = msg->get("Delete");
+	binding_name[26] = msg->get("ActionBar Accept");
+	binding_name[27] = msg->get("ActionBar Left");
+	binding_name[28] = msg->get("ActionBar Right");
+	binding_name[29] = msg->get("ActionBar Use");
+	binding_name[30] = msg->get("Developer Menu");
 
 	mouse_button[0] = msg->get("lmb");
 	mouse_button[1] = msg->get("mmb");

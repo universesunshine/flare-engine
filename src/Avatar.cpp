@@ -71,9 +71,11 @@ Avatar::Avatar()
 	loadLayerDefinitions();
 
 	// load target animation
-	anim->increaseCount("animations/target.txt");
-	target_animset = anim->getAnimationSet("animations/target.txt");
-	target_anim = target_animset->getAnimation();
+	if (SHOW_TARGET) {
+		anim->increaseCount("animations/target.txt");
+		target_animset = anim->getAnimationSet("animations/target.txt");
+		target_anim = target_animset->getAnimation();
+	}
 
 	// load foot-step definitions
 	// @CLASS Avatar: Step sounds|Description of items/step_sounds.txt
@@ -209,8 +211,12 @@ void Avatar::loadGraphics(std::vector<Layer_gfx> _img_gfx) {
 			string name = "animations/avatar/"+stats.gfx_base+"/"+_img_gfx[i].gfx+".txt";
 			anim->increaseCount(name);
 			animsets.push_back(anim->getAnimationSet(name));
+			animsets.back()->setParent(animationSet);
 			anims.push_back(animsets.back()->getAnimation(activeAnimation->getName()));
-			anims.back()->syncTo(activeAnimation);
+			setAnimation("stance");
+			if(!anims.back()->syncTo(activeAnimation)) {
+				logError("Avatar: Error syncing animation in '%s' to 'animations/hero.txt'.\n", animsets.back()->getName().c_str());
+			}
 		}
 		else {
 			animsets.push_back(NULL);
@@ -234,6 +240,8 @@ void Avatar::loadStepFX(const string& stepname) {
 		snd->unload(sound_steps[i]);
 	}
 	sound_steps.clear();
+
+	if (filename == "") return;
 
 	// A literal "NULL" means we don't want to load any new sounds
 	// This is used when transforming, since creatures don't have step sound effects
@@ -326,7 +334,7 @@ void Avatar::handlePower(std::vector<ActionData> &action_queue) {
 			}
 
 			// draw a target on the ground if we're attacking
-			if (!power.buff && !power.buff_teleport && power.type != POWTYPE_TRANSFORM && power.new_state != POWSTATE_BLOCK) {
+			if (target_anim && !power.buff && !power.buff_teleport && power.type != POWTYPE_TRANSFORM && power.new_state != POWSTATE_BLOCK) {
 				target_pos = target;
 				target_visible = true;
 				target_anim->reset();
@@ -482,12 +490,12 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse)
 			anims[i]->advanceFrame();
 	}
 
-	if (target_anim->getTimesPlayed() >= 1) {
+	if (target_anim && target_anim->getTimesPlayed() >= 1) {
 		target_visible = false;
 		target_anim->reset();
 	}
 
-	if (target_visible)
+	if (target_anim && target_visible)
 		target_anim->advanceFrame();
 
 	// handle transformation
@@ -590,6 +598,10 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse)
 
 			// do power
 			if (activeAnimation->isActiveFrame()) {
+				// some powers check if the caster is blocking a tile
+				// so we block the player tile prematurely here
+				mapr->collider.block(stats.pos.x, stats.pos.y, false);
+
 				powers->activate(current_power, &stats, act_target);
 			}
 
@@ -718,13 +730,24 @@ void Avatar::transform() {
 	// calling a transform power locks the actionbar, so we unlock it here
 	inpt->unlockActionBar();
 
+	delete charmed_stats;
+	charmed_stats = NULL;
+
+	Enemy_Level el = enemyg->getRandomEnemy(stats.transform_type, 0, 0);
+
+	if (el.type != "") {
+		charmed_stats = new StatBlock();
+		charmed_stats->load(el.type);
+	}
+	else {
+		logError("Avatar: Could not transform into creature type '%s'\n", stats.transform_type.c_str());
+		stats.transform_type = "";
+		return;
+	}
+
 	transform_triggered = true;
 	stats.transformed = true;
 	setPowers = true;
-
-	delete charmed_stats;
-	charmed_stats = new StatBlock();
-	charmed_stats->load(stats.transform_type);
 
 	// temporary save hero stats
 	delete hero_stats;
@@ -874,7 +897,7 @@ void Avatar::resetActiveAnimation() {
 
 void Avatar::addRenders(vector<Renderable> &r, vector<Renderable> &r_dead) {
 	// target
-	if (target_visible) {
+	if (target_anim && target_visible) {
 		Renderable ren = target_anim->getCurrentFrame(0);
 		ren.map_pos = target_pos;
 		ren.prio = 0;
@@ -910,8 +933,10 @@ void Avatar::addRenders(vector<Renderable> &r, vector<Renderable> &r_dead) {
 }
 
 Avatar::~Avatar() {
-	anim->decreaseCount("animations/target.txt");
-	delete target_anim;
+	if (SHOW_TARGET) {
+		anim->decreaseCount("animations/target.txt");
+		delete target_anim;
+	}
 
 	if (stats.transformed && charmed_stats && charmed_stats->animations != "") {
 		anim->decreaseCount(charmed_stats->animations);

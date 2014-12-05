@@ -119,11 +119,10 @@ StatBlock::StatBlock()
 	, powers_passive()
 	, power_chance(POWERSLOT_COUNT, 0)		// enemy only
 	, power_index(POWERSLOT_COUNT, 0)		// both
-	, power_cooldown(POWERSLOT_COUNT, 0)	// enemy only
 	, power_ticks(POWERSLOT_COUNT, 0)		// enemy only
 	, melee_range(1.0f) //both
 	, threat_range(0)  // enemy
-	, passive_attacker(false)//enemy
+	, combat_style(COMBAT_DEFAULT)//enemy
 	, hero_stealth(0)
 	, turn_delay(0)
 	, turn_ticks(0)
@@ -259,7 +258,14 @@ void StatBlock::load(const string& filename) {
 	if (!infile.open(filename))
 		return;
 
+	bool clear_loot = true;
+
 	while (infile.next()) {
+		if (infile.new_section) {
+			// APPENDed file
+			clear_loot = true;
+		}
+
 		int num = toInt(infile.val);
 		float fnum = toFloat(infile.val);
 		bool valid = loadCoreStat(&infile) || loadSfxStat(&infile);
@@ -282,6 +288,11 @@ void StatBlock::load(const string& filename) {
 			// loot=[id],[percent_chance]
 			// optionally allow range:
 			// loot=[id],[percent_chance],[count_min],[count_max]
+
+			if (clear_loot) {
+				loot_table.clear();
+				clear_loot = false;
+			}
 
 			loot_table.push_back(Event_Component());
 			loot->parseLoot(infile, &loot_table.back(), &loot_table);
@@ -338,14 +349,6 @@ void StatBlock::load(const string& filename) {
 		else if (infile.key == "power_ranged_ment") power_index[RANGED_MENT] = num;
 		// @ATTR power_beacon|integer|Power index of a "beacon" power used to aggro nearby creatures.
 		else if (infile.key == "power_beacon") power_index[BEACON] = num;
-		// @ATTR cooldown_melee_phys|duration|Cooldown after using the physical melee power.
-		else if (infile.key == "cooldown_melee_phys") power_cooldown[MELEE_PHYS] = parse_duration(infile.val);
-		// @ATTR cooldown_melee_ment|duration|Cooldown after using the mental melee power.
-		else if (infile.key == "cooldown_melee_ment") power_cooldown[MELEE_MENT] = parse_duration(infile.val);
-		// @ATTR cooldown_ranged_phys|duration|Cooldown after using the physical ranged power.
-		else if (infile.key == "cooldown_ranged_phys") power_cooldown[RANGED_PHYS] = parse_duration(infile.val);
-		// @ATTR cooldown_ranged_ment|duration|Cooldown after using the mental ranged power.
-		else if (infile.key == "cooldown_ranged_ment") power_cooldown[RANGED_MENT] = parse_duration(infile.val);
 		// @ATTR power_on_hit|integer|Power index that is triggered when hit.
 		else if (infile.key == "power_on_hit") power_index[ON_HIT] = num;
 		// @ATTR power_on_death|integer|Power index that is triggered when dead.
@@ -371,6 +374,7 @@ void StatBlock::load(const string& filename) {
 
 		else if (infile.key == "passive_powers") {
 			// @ATTR passive_powers|power (integer), ...|A list of passive powers this creature has.
+			powers_passive.clear();
 			std::string p = infile.nextValue();
 			while (p != "") {
 				powers_passive.push_back(toInt(p));
@@ -382,8 +386,13 @@ void StatBlock::load(const string& filename) {
 		else if (infile.key == "melee_range") melee_range = fnum;
 		// @ATTR threat_range|float|Radius of the area this creature will be able to start chasing the hero.
 		else if (infile.key == "threat_range") threat_range = fnum;
-		// @ATTR passive_attacker|boolean|Won't initiate combat until attacked.
-		else if (infile.key == "passive_attacker") passive_attacker = toBool(infile.val);
+		// @ATTR combat_style|[default:aggressive:passive]|How the creature will enter combat. Default is within range of the hero; Aggressive is always in combat; Passive must be attacked to enter combat.
+		else if (infile.key == "combat_style") {
+			if (infile.val == "default") combat_style = COMBAT_DEFAULT;
+			else if (infile.val == "aggressive") combat_style = COMBAT_AGGRESSIVE;
+			else if (infile.val == "passive") combat_style = COMBAT_PASSIVE;
+			else infile.error("StatBlock: Unknown combat style '%s'", infile.val.c_str());
+		}
 
 		// @ATTR animations|string|Filename of an animation definition.
 		else if (infile.key == "animations") animations = infile.val;
@@ -393,6 +402,7 @@ void StatBlock::load(const string& filename) {
 
 		else if (infile.key == "categories") {
 			// @ATTR categories|category (string), ...|Categories that this enemy belongs to.
+			categories.clear();
 			string cat;
 			while ((cat = infile.nextValue()) != "") {
 				categories.push_back(cat);

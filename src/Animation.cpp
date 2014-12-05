@@ -89,6 +89,8 @@ void Animation::setupUncompressed(Point _render_size, Point _render_offset, int 
 }
 
 void Animation::setup(unsigned short _frames, unsigned short _duration, unsigned short _maxkinds) {
+	frame_count = _frames;
+
 	calculateFrames(frames, _frames, _duration);
 
 	if (!frames.empty()) number_frames = frames.back()+1;
@@ -119,7 +121,7 @@ void Animation::addFrame(	unsigned short index,
 							Rect rect,
 							Point _render_offset) {
 
-	if (index > gfx.size()/max_kinds) {
+	if (index >= gfx.size()/max_kinds) {
 		logError("Animation: Animation(%s) adding rect(%d, %d, %d, %d) to frame index(%u) out of bounds. must be in [0, %d]\n",
 				name.c_str(), rect.x, rect.y, rect.w, rect.h, index, (int)gfx.size()/max_kinds);
 		return;
@@ -214,12 +216,27 @@ void Animation::reset() {
 	elapsed_frames = 0;
 }
 
-void Animation::syncTo(const Animation *other) {
+bool Animation::syncTo(const Animation *other) {
 	cur_frame = other->cur_frame;
 	cur_frame_index = other->cur_frame_index;
 	times_played = other->times_played;
 	additional_data = other->additional_data;
 	elapsed_frames = other->elapsed_frames;
+
+	if (cur_frame_index >= frames.size()) {
+		if (frames.empty()) {
+			logError("Animation: '%s' animation has no frames, but current frame index is greater than 0.\n", name.c_str());
+			cur_frame_index = 0;
+			return false;
+		}
+		else {
+			logError("Animation: Current frame index (%d) was larger than the last frame index (%d) when syncing '%s' animation.\n", cur_frame_index, frames.size()-1, name.c_str());
+			cur_frame_index = frames.size()-1;
+			return false;
+		}
+	}
+
+	return true;
 }
 
 void Animation::setActiveFrames(const std::vector<short> &_active_frames) {

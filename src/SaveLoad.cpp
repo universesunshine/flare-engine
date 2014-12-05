@@ -293,7 +293,7 @@ void GameStatePlay::loadGame() {
 						logError("SaveLoad: Hotkey power id (%d) out of bounds 1-%d, skipping\n", hotkeys[i], (int)powers->powers.size());
 						hotkeys[i] = 0;
 					}
-					else if (hotkeys[i] != 0 && powers->powers[hotkeys[i]].name == "") {
+					else if (hotkeys[i] != 0 && (unsigned)hotkeys[i] < powers->powers.size() && powers->powers[hotkeys[i]].name == "") {
 						logError("SaveLoad: Hotkey power with id=%d, found on position %d does not exist, skipping\n", hotkeys[i], i);
 						hotkeys[i] = 0;
 					}
@@ -329,7 +329,7 @@ void GameStatePlay::loadGame() {
 
 	// trigger passive effects here? Saved HP/MP values might depend on passively boosted HP/MP
 	// powers->activatePassives(pc->stats);
-	if (SAVE_HPMP) {
+	if (SAVE_HPMP && saved_hp != 0) {
 		if (saved_hp < 0 || saved_hp > pc->stats.get(STAT_HP_MAX)) {
 			logError("SaveLoad: HP value is out of bounds, setting to maximum\n");
 			pc->stats.hp = pc->stats.get(STAT_HP_MAX);

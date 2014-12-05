@@ -115,6 +115,9 @@ void PowerManager::loadPowers() {
 	if (!infile.open("powers/powers.txt"))
 		return;
 
+	bool clear_post_effects = true;
+	bool clear_loot = true;
+
 	int input_id = 0;
 	bool skippingEntry = false;
 
@@ -129,6 +132,10 @@ void PowerManager::loadPowers() {
 				infile.error("PowerManager: Power index out of bounds 1-%d, skipping power.", INT_MAX);
 			if (static_cast<int>(powers.size()) < input_id + 1)
 				powers.resize(input_id + 1);
+
+			clear_post_effects = true;
+			clear_loot = true;
+
 			continue;
 		}
 		if (skippingEntry)
@@ -196,6 +203,7 @@ void PowerManager::loadPowers() {
 		// power requirements
 		else if (infile.key == "requires_flags") {
 			// @ATTR requires_flags|flag (string), ...|A comma separated list of equip flags that are required to use this power. See engine/equip_flags.txt
+			powers[input_id].requires_flags.clear();
 			std::string flag = popFirstString(infile.val);
 
 			while (flag != "") {
@@ -366,11 +374,20 @@ void PowerManager::loadPowers() {
 			powers[input_id].buff_party_power_id = toInt(infile.val);
 		else if (infile.key == "post_effect") {
 			// @ATTR post_effect|[effect_id, magnitude (integer), duration (duration)]|Post effect.
+			if (clear_post_effects) {
+				powers[input_id].post_effects.clear();
+				clear_post_effects = false;
+			}
 			PostEffect pe;
 			pe.id = popFirstString(infile.val);
-			pe.magnitude = popFirstInt(infile.val);
-			pe.duration = parse_duration(popFirstString(infile.val));
-			powers[input_id].post_effects.push_back(pe);
+			if (effects.find(pe.id) == effects.end()) {
+				infile.error("PowerManager: Unknown effect '%s'", pe.id.c_str());
+			}
+			else {
+				pe.magnitude = popFirstInt(infile.val);
+				pe.duration = parse_duration(popFirstString(infile.val));
+				powers[input_id].post_effects.push_back(pe);
+			}
 		}
 		// pre and post power effects
 		else if (infile.key == "post_power")
@@ -440,6 +457,7 @@ void PowerManager::loadPowers() {
 			powers[input_id].target_party = toBool(infile.val);
 		else if (infile.key == "target_categories") {
 			// @ATTR target_categories|string,...|Hazard will only affect enemies in these categories.
+			powers[input_id].target_categories.clear();
 			string cat;
 			while ((cat = infile.nextValue()) != "") {
 				powers[input_id].target_categories.push_back(cat);
@@ -478,6 +496,10 @@ void PowerManager::loadPowers() {
 		}
 		else if (infile.key == "loot") {
 			// @ATTR loot|[string,drop_chance([fixed:chance(integer)]),quantity_min(integer),quantity_max(integer)],...|Give the player this loot when the power is used
+			if (clear_loot) {
+				powers[input_id].loot.clear();
+				clear_loot = false;
+			}
 			if (lootm) {
 				powers[input_id].loot.push_back(Event_Component());
 				lootm->parseLoot(infile, &powers[input_id].loot.back(), &powers[input_id].loot);
@@ -947,13 +969,6 @@ bool PowerManager::repeater(int power_index, StatBlock *src_stats, FPoint target
  * Spawn a creature. Does not create a hazard
  */
 bool PowerManager::spawn(int power_index, StatBlock *src_stats, FPoint target) {
-
-	// apply any buffs
-	buff(power_index, src_stats, target);
-
-	// If there's a sound effect, play it here
-	playSound(power_index);
-
 	Map_Enemy espawn;
 	espawn.type = powers[power_index].spawn_type;
 	espawn.summoner = src_stats;
@@ -969,8 +984,19 @@ bool PowerManager::spawn(int power_index, StatBlock *src_stats, FPoint target) {
 		espawn.pos = calcVector(src_stats->pos, src_stats->direction, src_stats->melee_range);
 	}
 
-	if (powers[power_index].target_neighbor > 0) {
-		espawn.pos = floor(collider->get_random_neighbor(floor(src_stats->pos), powers[power_index].target_neighbor));
+	// force target_neighbor if our initial target is blocked
+	int target_neighbor = powers[power_index].target_neighbor;
+	if (!collider->is_empty(espawn.pos.x, espawn.pos.y) && target_neighbor < 1) {
+		target_neighbor = 1;
+	}
+
+	if (target_neighbor > 0) {
+		espawn.pos = floor(collider->get_random_neighbor(floor(src_stats->pos), target_neighbor));
+	}
+
+	// can't spawn on a blocked tile
+	if (!collider->is_empty(espawn.pos.x, espawn.pos.y)) {
+		return false;
 	}
 
 	espawn.direction = calcDirection(src_stats->pos.x, src_stats->pos.y, target.x, target.y);
@@ -981,6 +1007,12 @@ bool PowerManager::spawn(int power_index, StatBlock *src_stats, FPoint target) {
 		enemies.push(espawn);
 	}
 	payPowerCost(power_index, src_stats);
+
+	// apply any buffs
+	buff(power_index, src_stats, target);
+
+	// If there's a sound effect, play it here
+	playSound(power_index);
 
 	return true;
 }

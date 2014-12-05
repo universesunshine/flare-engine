@@ -251,7 +251,7 @@ void MenuActionBar::render() {
 
 	// draw hotkeyed icons
 	for (int i=0; i<12; i++) {
-		if (hotkeys[i] != 0) {
+		if (hotkeys[i] != 0 && (unsigned)hotkeys_mod[i] < powers->powers.size()) {
 			const Power &power = powers->getPower(hotkeys_mod[i]);
 
 			//see if the slot should be greyed out
@@ -265,12 +265,6 @@ void MenuActionBar::render() {
 			unsigned icon_offset = 0;/* !slot_enabled[i] ? ICON_DISABLED_OFFSET :
 								   (hero->activated_powerslot == i ? ICON_HIGHLIGHT_OFFSET : 0); */
 			slots[i]->setIcon(power.icon + icon_offset);
-			if (slot_item_count[i] > -1) {
-				slots[i]->setAmount(slot_item_count[i]);
-			}
-			else {
-				slots[i]->setAmount(0,0);
-			}
 			slots[i]->render();
 		}
 		else {
@@ -488,7 +482,7 @@ void MenuActionBar::checkAction(std::vector<ActionData> &action_queue) {
 		}
 
 		// a power slot was activated
-		if (action.power > 0) {
+		if (action.power > 0 && (unsigned)action.power < powers->powers.size()) {
 			const Power &power = powers->getPower(action.power);
 			bool can_use_power = true;
 			action.instant_item = (power.new_state == POWSTATE_INSTANT && power.requires_item > 0);
@@ -594,6 +588,28 @@ FPoint MenuActionBar::setTarget(bool have_aim, bool aim_assist) {
 	else {
 		return calcVector(hero->stats.pos, hero->stats.direction, hero->stats.melee_range);
 	}
+}
+
+void MenuActionBar::setItemCount(int index, int count, bool is_equipped) {
+	if (index < 0 || index > 11) return;
+
+	slot_item_count[index] = count;
+	if (count == 0) {
+		if (slot_activated[index])
+			slots[index]->deactivate();
+
+		slot_enabled[index] = false;
+	}
+
+	if (is_equipped)
+		// we don't care how many of an equipped item we're carrying
+		slots[index]->setAmount(count, 0);
+	else if (count >= 0)
+		// we can always carry more than 1 of any item, so always display non-equipped item count
+		slots[index]->setAmount(count, 2);
+	else
+		// slot contains a regular power, so ignore item count
+		slots[index]->setAmount(0,0);
 }
 
 MenuActionBar::~MenuActionBar() {
