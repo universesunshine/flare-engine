@@ -25,7 +25,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include <typeinfo>
 #include <cmath>
 #include <iomanip>
-using namespace std;
 
 #include "CommonIncludes.h"
 #include "FileParser.h"
@@ -46,7 +45,7 @@ using namespace std;
 class ConfigEntry {
 public:
 	const char * name;
-	const type_info * type;
+	const std::type_info * type;
 	const char * default_val;
 	void * storage;
 	const char * comment;
@@ -54,15 +53,16 @@ public:
 
 ConfigEntry config[] = {
 	{ "fullscreen",       &typeid(FULLSCREEN),      "0",   &FULLSCREEN,      "fullscreen mode. 1 enable, 0 disable."},
-	{ "resolution_w",     &typeid(VIEW_W),          "640", &VIEW_W,          "display resolution. 640x480 minimum."},
-	{ "resolution_h",     &typeid(VIEW_H),          "480", &VIEW_H,          NULL},
+	{ "resolution_w",     &typeid(SCREEN_W),        "640", &SCREEN_W,        "display resolution. 640x480 minimum."},
+	{ "resolution_h",     &typeid(SCREEN_H),        "480", &SCREEN_H,        NULL},
 	{ "audio",            &typeid(AUDIO),           "1",   &AUDIO,           "Enable music and sound subsystem."},
 	{ "music_volume",     &typeid(MUSIC_VOLUME),    "96",  &MUSIC_VOLUME,    "music and sound volume (0 = silent, 128 = max)"},
 	{ "sound_volume",     &typeid(SOUND_VOLUME),    "128", &SOUND_VOLUME,    NULL},
 	{ "combat_text",      &typeid(COMBAT_TEXT),     "0",   &COMBAT_TEXT,     "display floating damage text. 1 enable, 0 disable."},
 	{ "mouse_move",       &typeid(MOUSE_MOVE),      "0",   &MOUSE_MOVE,      "use mouse to move (experimental). 1 enable, 0 disable."},
-	{ "hwsurface",        &typeid(HWSURFACE),       "1",   &HWSURFACE,       "hardware surfaces, double buffering. Try disabling for performance. 1 enable, 0 disable."},
-	{ "doublebuf",        &typeid(DOUBLEBUF),       "1",   &DOUBLEBUF,       NULL},
+	{ "hwsurface",        &typeid(HWSURFACE),       "1",   &HWSURFACE,       "hardware surfaces, v-sync. Try disabling for performance. 1 enable, 0 disable."},
+	{ "vsync",            &typeid(VSYNC),           "1",   &VSYNC,           NULL},
+	{ "texture_filter",   &typeid(TEXTURE_FILTER),  "1",   &TEXTURE_FILTER,  "texture filter quality. 0 nearest neighbor (worst), 1 linear (best)"},
 	{ "enable_joystick",  &typeid(ENABLE_JOYSTICK), "0",   &ENABLE_JOYSTICK, "joystick settings."},
 	{ "joystick_device",  &typeid(JOYSTICK_DEVICE), "0",   &JOYSTICK_DEVICE, NULL},
 	{ "joystick_deadzone",&typeid(JOY_DEADZONE),    "100", &JOY_DEADZONE,    NULL},
@@ -82,14 +82,14 @@ ConfigEntry config[] = {
 const int config_size = sizeof(config) / sizeof(ConfigEntry);
 
 // Paths
-string PATH_CONF = "";
-string PATH_USER = "";
-string PATH_DATA = "";
-string CUSTOM_PATH_DATA = "";
+std::string PATH_CONF = "";
+std::string PATH_USER = "";
+std::string PATH_DATA = "";
+std::string CUSTOM_PATH_DATA = "";
 
 // Filenames
-string FILE_SETTINGS	= "settings.txt";
-string FILE_KEYBINDINGS = "keybindings.txt";
+std::string FILE_SETTINGS	= "settings.txt";
+std::string FILE_KEYBINDINGS = "keybindings.txt";
 
 // Tile Settings
 float UNITS_PER_PIXEL_X;
@@ -112,14 +112,18 @@ unsigned short ICON_SIZE;
 bool FULLSCREEN;
 unsigned short MAX_FRAMES_PER_SEC = 60;
 unsigned char BITS_PER_PIXEL = 32;
-unsigned short VIEW_W;
-unsigned short VIEW_H;
-unsigned short VIEW_W_HALF = VIEW_W/2;
-unsigned short VIEW_H_HALF = VIEW_H/2;
-short MIN_VIEW_W = -1;
-short MIN_VIEW_H = -1;
-bool DOUBLEBUF;
+unsigned short VIEW_W = 0;
+unsigned short VIEW_H = 0;
+unsigned short VIEW_W_HALF = 0;
+unsigned short VIEW_H_HALF = 0;
+short MIN_SCREEN_W = 640;
+short MIN_SCREEN_H = 480;
+unsigned short SCREEN_W = 640;
+unsigned short SCREEN_H = 480;
+bool VSYNC;
 bool HWSURFACE;
+bool TEXTURE_FILTER;
+bool IGNORE_TEXTURE_FILTER = false;
 bool CHANGE_GAMMA;
 float GAMMA;
 
@@ -216,25 +220,28 @@ void setPaths() {
 
 	// handle Windows-specific path options
 	if (getenv("APPDATA") != NULL) {
-		PATH_CONF = PATH_USER = (string)getenv("APPDATA") + "\\flare";
+		PATH_CONF = PATH_USER = (std::string)getenv("APPDATA") + "\\flare";
 		createDir(PATH_CONF);
 		createDir(PATH_USER);
 
 		PATH_CONF += "\\config";
-		PATH_USER += "\\saves";
+		PATH_USER += "\\userdata";
 		createDir(PATH_CONF);
 		createDir(PATH_USER);
 	}
 	else {
 		PATH_CONF = "config";
-		PATH_USER = "saves";
+		PATH_USER = "userdata";
 		createDir(PATH_CONF);
 		createDir(PATH_USER);
 	}
 
+	createDir(PATH_USER + "\\mods");
+	createDir(PATH_USER + "\\saves");
+
 	PATH_DATA = "";
 	if (dirExists(CUSTOM_PATH_DATA)) PATH_DATA = CUSTOM_PATH_DATA;
-	else if (!CUSTOM_PATH_DATA.empty()) logError("Settings: Could not find specified game data directory.\n");
+	else if (!CUSTOM_PATH_DATA.empty()) logError("Settings: Could not find specified game data directory.");
 
 	PATH_CONF = PATH_CONF + "/";
 	PATH_USER = PATH_USER + "/";
@@ -243,25 +250,47 @@ void setPaths() {
 // Android paths
 void setPaths() {
 
-	PATH_CONF = string(SDL_AndroidGetInternalStoragePath()) + "/config";
-	PATH_USER = string(SDL_AndroidGetInternalStoragePath()) + "/saves";
+	PATH_CONF = std::string(SDL_AndroidGetInternalStoragePath()) + "/config";
+	PATH_USER = std::string(SDL_AndroidGetInternalStoragePath()) + "/userdata";
 	createDir(PATH_CONF);
 	createDir(PATH_USER);
+	createDir(PATH_USER + "/mods");
+	createDir(PATH_USER + "/saves");
 
-	PATH_DATA = string(SDL_AndroidGetInternalStoragePath());
+	std::string mods_folder = "data/org.flare.app/files";
+
+	if (SDL_AndroidGetExternalStorageState() != 0)
+	{
+		PATH_DATA = std::string(SDL_AndroidGetExternalStoragePath());
+	}
+	else if (dirExists("/sdcard/Android"))
+	{
+		PATH_DATA = "/sdcard/Android/" + mods_folder;
+	}
+	else if (dirExists("/mnt/sdcard/Android"))
+	{
+		PATH_DATA = "/mnt/sdcard/Android/" + mods_folder;
+	}
+	else if (dirExists("storage/sdcard0/Android"))
+	{
+		PATH_DATA = "/storage/sdcard0/Android/" + mods_folder;
+	}
+	else if (dirExists("/storage/emulated/0/Android"))
+	{
+		PATH_DATA = "/storage/emulated/0/Android/" + mods_folder;
+	}
+	else if (dirExists("/storage/emulated/legacy/Android"))
+	{
+		PATH_DATA = "/storage/emulated/legacy/Android/" + mods_folder;
+	}
+	else
+	{
+		logError("Settings: Android external storage unavailable: %s", SDL_GetError());
+	}
 
 	PATH_CONF = PATH_CONF + "/";
 	PATH_USER = PATH_USER + "/";
 	PATH_DATA = PATH_DATA + "/";
-}
-#elif __amigaos4__
-// AmigaOS paths
-void setPaths() {
-	PATH_CONF = "PROGDIR:";
-	PATH_USER = "PROGDIR:";
-	PATH_DATA = "PROGDIR:";
-	if (dirExists(CUSTOM_PATH_DATA)) PATH_DATA = CUSTOM_PATH_DATA;
-	else if (!CUSTOM_PATH_DATA.empty()) logError("Settings: Could not find specified game data directory.\n");
 }
 #else
 void setPaths() {
@@ -272,44 +301,42 @@ void setPaths() {
 	// set config path (settings, keybindings)
 	// $XDG_CONFIG_HOME/flare/
 	if (getenv("XDG_CONFIG_HOME") != NULL) {
-		PATH_CONF = (string)getenv("XDG_CONFIG_HOME") + "/flare/";
-		createDir(PATH_CONF);
+		PATH_CONF = (std::string)getenv("XDG_CONFIG_HOME") + "/flare/";
 	}
 	// $HOME/.config/flare/
 	else if (getenv("HOME") != NULL) {
-		PATH_CONF = (string)getenv("HOME") + "/.config/";
+		PATH_CONF = (std::string)getenv("HOME") + "/.config/";
 		createDir(PATH_CONF);
 		PATH_CONF += "flare/";
-		createDir(PATH_CONF);
 	}
 	// ./config/
 	else {
 		PATH_CONF = "./config/";
-		createDir(PATH_CONF);
 	}
+
+	createDir(PATH_CONF);
 
 	// set user path (save games)
 	// $XDG_DATA_HOME/flare/
 	if (getenv("XDG_DATA_HOME") != NULL) {
-		PATH_USER = (string)getenv("XDG_DATA_HOME") + "/flare/";
-		createDir(PATH_USER);
-		createDir(PATH_USER + "mods/");
+		PATH_USER = (std::string)getenv("XDG_DATA_HOME") + "/flare/";
 	}
 	// $HOME/.local/share/flare/
 	else if (getenv("HOME") != NULL) {
-		PATH_USER = (string)getenv("HOME") + "/.local/";
+		PATH_USER = (std::string)getenv("HOME") + "/.local/";
 		createDir(PATH_USER);
 		PATH_USER += "share/";
 		createDir(PATH_USER);
 		PATH_USER += "flare/";
-		createDir(PATH_USER);
-		createDir(PATH_USER + "mods/");
 	}
 	// ./saves/
 	else {
-		PATH_USER = "./saves/";
-		createDir(PATH_USER);
+		PATH_USER = "./userdata/";
 	}
+
+	createDir(PATH_USER);
+	createDir(PATH_USER + "mods/");
+	createDir(PATH_USER + "saves/");
 
 	// data folder
 	// while PATH_CONF and PATH_USER are created if not found,
@@ -328,7 +355,7 @@ void setPaths() {
 		if (!path_data) PATH_DATA = CUSTOM_PATH_DATA;
 		path_data = true;
 	}
-	else if (!CUSTOM_PATH_DATA.empty()) logError("Settings: Could not find specified game data directory.\n");
+	else if (!CUSTOM_PATH_DATA.empty()) logError("Settings: Could not find specified game data directory.");
 
 	// Check for the local data before trying installed ones.
 	if (dirExists("./mods")) {
@@ -339,8 +366,8 @@ void setPaths() {
 	// check $XDG_DATA_DIRS options
 	// a list of directories in preferred order separated by :
 	if (getenv("XDG_DATA_DIRS") != NULL) {
-		string pathlist = (string)getenv("XDG_DATA_DIRS");
-		string pathtest;
+		std::string pathlist = (std::string)getenv("XDG_DATA_DIRS");
+		std::string pathtest;
 		pathtest = popFirstString(pathlist,':');
 		while (pathtest != "") {
 			if (!path_data) {
@@ -382,7 +409,7 @@ static ConfigEntry * getConfigEntry(const char * name) {
 		if (std::strcmp(config[i].name, name) == 0) return config + i;
 	}
 
-	logError("Settings: '%s' is not a valid configuration key.\n", name);
+	logError("Settings: '%s' is not a valid configuration key.", name);
 	return NULL;
 }
 
@@ -405,7 +432,7 @@ void loadTilesetSettings() {
 	FileParser infile;
 	// load tileset settings from engine config
 	// @CLASS Settings: Tileset config|Description of engine/tileset_config.txt
-	if (infile.open("engine/tileset_config.txt", true, "Unable to open engine/tileset_config.txt! Defaulting to 64x32 isometric tiles.\n")) {
+	if (infile.open("engine/tileset_config.txt", true, "Unable to open engine/tileset_config.txt! Defaulting to 64x32 isometric tiles.")) {
 		while (infile.next()) {
 			if (infile.key == "tile_size") {
 				// @ATTR tile_size|w (integet), h (integer)|The width and height of a tile.
@@ -429,15 +456,13 @@ void loadTilesetSettings() {
 	}
 
 	// Init automatically calculated parameters
-	VIEW_W_HALF = VIEW_W / 2;
-	VIEW_H_HALF = VIEW_H / 2;
 	if (TILESET_ORIENTATION == TILESET_ISOMETRIC) {
 		if (TILE_W > 0 && TILE_H > 0) {
 			UNITS_PER_PIXEL_X = 2.0f / TILE_W;
 			UNITS_PER_PIXEL_Y = 2.0f / TILE_H;
 		}
 		else {
-			logError("Settings: Tile dimensions must be greater than 0. Resetting to the default size of 64x32.\n");
+			logError("Settings: Tile dimensions must be greater than 0. Resetting to the default size of 64x32.");
 			TILE_W = 64;
 			TILE_H = 32;
 		}
@@ -448,13 +473,13 @@ void loadTilesetSettings() {
 			UNITS_PER_PIXEL_Y = 1.0f / TILE_H;
 		}
 		else {
-			logError("Settings: Tile dimensions must be greater than 0. Resetting to the default size of 64x32.\n");
+			logError("Settings: Tile dimensions must be greater than 0. Resetting to the default size of 64x32.");
 			TILE_W = 64;
 			TILE_H = 32;
 		}
 	}
 	if (UNITS_PER_PIXEL_X == 0 || UNITS_PER_PIXEL_Y == 0) {
-		logError("Settings: One of UNITS_PER_PIXEL values is zero! %dx%d\n", (int)UNITS_PER_PIXEL_X, (int)UNITS_PER_PIXEL_Y);
+		logError("Settings: One of UNITS_PER_PIXEL values is zero! %dx%d", (int)UNITS_PER_PIXEL_X, (int)UNITS_PER_PIXEL_Y);
 		SDL_Quit();
 		exit(1);
 	}
@@ -467,6 +492,7 @@ void loadMiscSettings() {
 	HERO_CLASSES.clear();
 	FRAME_W = 0;
 	FRAME_H = 0;
+	IGNORE_TEXTURE_FILTER = false;
 	ICON_SIZE = 0;
 	AUTOPICKUP_CURRENCY = false;
 	MAX_ABSORB = 90;
@@ -491,6 +517,7 @@ void loadMiscSettings() {
 	CORPSE_TIMEOUT = 60*MAX_FRAMES_PER_SEC;
 	SELL_WITHOUT_VENDOR = true;
 	AIM_ASSIST = 0;
+	SAVE_PREFIX = "";
 	WINDOW_TITLE = "Flare";
 	SOUND_FALLOFF = 15;
 	PARTY_EXP_PERCENTAGE = 100;
@@ -508,7 +535,7 @@ void loadMiscSettings() {
 			// @ATTR save_hpmp|boolean|When saving the game, keep the hero's current HP and MP.
 			if (infile.key == "save_hpmp")
 				SAVE_HPMP = toBool(infile.val);
-			// @ATTR corpse_timeout|duration|Duration that a corpse can exist on the map.
+			// @ATTR corpse_timeout|duration|Duration that a corpse can exist on the map in 'ms' or 's'.
 			else if (infile.key == "corpse_timeout")
 				CORPSE_TIMEOUT = parse_duration(infile.val);
 			// @ATTR sell_without_vendor|boolean|Allows selling items when not at a vendor via CTRL-Click.
@@ -540,7 +567,7 @@ void loadMiscSettings() {
 				CURRENCY_ID = toInt(infile.val);
 				if (CURRENCY_ID < 1) {
 					CURRENCY_ID = 1;
-					logError("Settings: Currency ID below the minimum allowed value. Resetting it to %d\n", CURRENCY_ID);
+					logError("Settings: Currency ID below the minimum allowed value. Resetting it to %d", CURRENCY_ID);
 				}
 			}
 			// @ATTR interact_range|float|Distance where the player can interact with objects and NPCs.
@@ -561,13 +588,18 @@ void loadMiscSettings() {
 		infile.close();
 	}
 
+	if (SAVE_PREFIX == "") {
+		logError("Settings: save_prefix not found in engine/misc.txt, setting to 'default'. This may cause save file conflicts between games that have no save_prefix.");
+		SAVE_PREFIX = "default";
+	}
+
 	// @CLASS Settings: Resolution|Description of engine/resolutions.txt
 	if (infile.open("engine/resolutions.txt")) {
 		while (infile.next()) {
 			// @ATTR menu_frame_width|integer|Width of frame for New Game, Configuration, etc. menus.
 			if (infile.key == "menu_frame_width")
 				FRAME_W = toInt(infile.val);
-			// @ATTR menu_frame_width|integer|Height of frame for New Game, Configuration, etc. menus.
+			// @ATTR menu_frame_height|integer|Height of frame for New Game, Configuration, etc. menus.
 			else if (infile.key == "menu_frame_height")
 				FRAME_H = toInt(infile.val);
 			// @ATTR icon_size|integer|Size of icons.
@@ -575,19 +607,35 @@ void loadMiscSettings() {
 				ICON_SIZE = toInt(infile.val);
 			// @ATTR required_width|integer|Minimum window/screen resolution width.
 			else if (infile.key == "required_width") {
-				MIN_VIEW_W = toInt(infile.val);
-				if (VIEW_W < MIN_VIEW_W) VIEW_W = MIN_VIEW_W;
-				VIEW_W_HALF = VIEW_W/2;
+				MIN_SCREEN_W = toInt(infile.val);
 			}
-			// @ATTR required_width|integer|Minimum window/screen resolution height.
+			// @ATTR required_height|integer|Minimum window/screen resolution height.
 			else if (infile.key == "required_height") {
-				MIN_VIEW_H = toInt(infile.val);
-				if (VIEW_H < MIN_VIEW_H) VIEW_H = MIN_VIEW_H;
-				VIEW_H_HALF = VIEW_H/2;
+				MIN_SCREEN_H = toInt(infile.val);
+			}
+			// @ATTR virtual_height|integer|The height (in pixels) of the game's actual rendering area. The width will be resized to match the window's aspect ration, and everything will be scaled up to fill the window.
+			else if (infile.key == "virtual_height") {
+				VIEW_H = toInt(infile.val);
+				VIEW_H_HALF = VIEW_H / 2;
+			}
+			// @ATTR ignore_texture_filter|boolean|If true, this ignores the "Texture Filtering" video setting and uses only nearest-neighbor scaling. This is good for games that use pixel art assets.
+			else if (infile.key == "ignore_texture_filter") {
+				IGNORE_TEXTURE_FILTER = toBool(infile.val);
 			}
 			else infile.error("Settings: '%s' is not a valid key.", infile.key.c_str());
 		}
 		infile.close();
+	}
+
+	// prevent the window from being too small
+	if (SCREEN_W < MIN_SCREEN_W) SCREEN_W = MIN_SCREEN_W;
+	if (SCREEN_H < MIN_SCREEN_H) SCREEN_H = MIN_SCREEN_H;
+
+	// set the default virtual height if it's not defined
+	if (VIEW_H == 0) {
+		logError("Settings: virtual_height is undefined. Setting it to %d.", MIN_SCREEN_H);
+		VIEW_H = MIN_SCREEN_H;
+		VIEW_H_HALF = VIEW_H / 2;
 	}
 
 	// @CLASS Settings: Gameplay|Description of engine/gameplay.txt
@@ -633,7 +681,7 @@ void loadMiscSettings() {
 		while (infile.next()) {
 			// @ATTR name|string|An identifier for this element.
 			if (infile.key == "name") e.name = infile.val;
-			// @ATTR dscription|string|The displayed name of this element.
+			// @ATTR description|string|The displayed name of this element.
 			else if (infile.key == "description") e.description = infile.val;
 
 			else infile.error("Settings: '%s' is not a valid key.", infile.key.c_str());
@@ -648,13 +696,13 @@ void loadMiscSettings() {
 
 	// @CLASS Settings: Equip flags|Description of engine/equip_flags.txt
 	if (infile.open("engine/equip_flags.txt")) {
-		string type,description;
+		std::string type,description;
 		type = description = "";
 
 		while (infile.next()) {
 			// @ATTR name|string|An identifier for this equip flag.
 			if (infile.key == "name") type = infile.val;
-			// @ATTR dscription|string|The displayed name of this equip flag.
+			// @ATTR description|string|The displayed name of this equip flag.
 			else if (infile.key == "description") description = infile.val;
 
 			else infile.error("Settings: '%s' is not a valid key.", infile.key.c_str());
@@ -705,14 +753,14 @@ void loadMiscSettings() {
 				}
 				else if (infile.key == "powers") {
 					// @ATTR powers|power (integer), ...|A list of powers that are unlocked when starting this class.
-					string power;
+					std::string power;
 					while ( (power = infile.nextValue()) != "") {
 						HERO_CLASSES.back().powers.push_back(toInt(power));
 					}
 				}
 				else if (infile.key == "campaign") {
 					// @ATTR campaign|status (string), ...|A list of campaign statuses that are set when starting this class.
-					string status;
+					std::string status;
 					while ( (status = infile.nextValue()) != "") {
 						HERO_CLASSES.back().statuses.push_back(status);
 					}
@@ -792,8 +840,8 @@ bool loadSettings() {
  */
 bool saveSettings() {
 
-	ofstream outfile;
-	outfile.open((PATH_CONF + FILE_SETTINGS).c_str(), ios::out);
+	std::ofstream outfile;
+	outfile.open((PATH_CONF + FILE_SETTINGS).c_str(), std::ios::out);
 
 	if (outfile.is_open()) {
 
@@ -812,7 +860,7 @@ bool saveSettings() {
 			outfile<<config[i].name<<"="<<toString(*config[i].type, config[i].storage)<<"\n";
 		}
 
-		if (outfile.bad()) logError("Settings: Unable to write settings file. No write access or disk is full!\n");
+		if (outfile.bad()) logError("Settings: Unable to write settings file. No write access or disk is full!");
 		outfile.close();
 		outfile.clear();
 	}
@@ -829,10 +877,6 @@ bool loadDefaults() {
 		ConfigEntry * entry = config + i;
 		tryParseValue(*entry->type, entry->default_val, entry->storage);
 	}
-
-	// Init automatically calculated parameters
-	VIEW_W_HALF = VIEW_W / 2;
-	VIEW_H_HALF = VIEW_H / 2;
 
 	loadAndroidDefaults();
 

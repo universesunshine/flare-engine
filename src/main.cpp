@@ -23,8 +23,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include <cmath>
 #include <ctime>
 
-using namespace std;
-
 #include "Settings.h"
 #include "Stats.h"
 #include "GameSwitcher.h"
@@ -36,14 +34,14 @@ GameSwitcher *gswitch;
 /**
  * Game initialization.
  */
-static void init(const std::string render_device_name) {
+static void init(const std::string &render_device_name) {
 
 	setPaths();
 	setStatNames();
 
 	// SDL Inits
 	if ( SDL_Init (SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0 ) {
-		logError("main: Could not initialize SDL: %s\n", SDL_GetError());
+		logError("main: Could not initialize SDL: %s", SDL_GetError());
 		exit(1);
 	}
 
@@ -52,17 +50,17 @@ static void init(const std::string render_device_name) {
 	mods = new ModManager();
 
 	if (!mods->haveFallbackMod()) {
-		logError("main: Could not find the default mod in the following locations:\n");
-		if (dirExists(PATH_DATA + "mods")) logError("%smods/\n", PATH_DATA.c_str());
-		if (dirExists(PATH_USER + "mods")) logError("%smods/\n", PATH_USER.c_str());
-		logError("A copy of the default mod is in the \"mods\" directory of the flare-engine repo.\n");
-		logError("The repo is located at: https://github.com/clintbellanger/flare-engine\n");
-		logError("Try again after copying the default mod to one of the above directories.\nExiting.\n");
+		logError("main: Could not find the default mod in the following locations:");
+		if (dirExists(PATH_DATA + "mods")) logError("%smods/", PATH_DATA.c_str());
+		if (dirExists(PATH_USER + "mods")) logError("%smods/", PATH_USER.c_str());
+		logError("A copy of the default mod is in the \"mods\" directory of the flare-engine repo.");
+		logError("The repo is located at: https://github.com/clintbellanger/flare-engine");
+		logError("Try again after copying the default mod to one of the above directories. Exiting.");
 		exit(1);
 	}
 
 	if (!loadSettings()) {
-		logError("%s", ("main: Could not load settings file: ‘" + PATH_CONF + FILE_SETTINGS + "’.\n").c_str());
+		logError("%s", ("main: Could not load settings file: ‘" + PATH_CONF + FILE_SETTINGS + "’.").c_str());
 		exit(1);
 	}
 
@@ -81,11 +79,11 @@ static void init(const std::string render_device_name) {
 
 	// Create render Device and Rendering Context.
 	render_device = getRenderDevice(render_device_name);
-	int status = render_device->createContext(VIEW_W, VIEW_H);
+	int status = render_device->createContext();
 
 	if (status == -1) {
 
-		logError("main: Error during SDL_SetVideoMode: %s\n", SDL_GetError());
+		logError("main: Error during SDL_SetVideoMode: %s", SDL_GetError());
 		SDL_Quit();
 		exit(1);
 	}
@@ -98,7 +96,7 @@ static void init(const std::string render_device_name) {
 		render_device->setGamma(GAMMA);
 
 	if (AUDIO && Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 1024)) {
-		logError("main: Error during Mix_OpenAudio: %s\n", SDL_GetError());
+		logError("main: Error during Mix_OpenAudio: %s", SDL_GetError());
 		AUDIO = false;
 	}
 
@@ -106,21 +104,21 @@ static void init(const std::string render_device_name) {
 
 	// initialize Joysticks
 	if(SDL_NumJoysticks() == 1) {
-		logInfo("1 joystick was found:\n");
+		logInfo("1 joystick was found:");
 	}
 	else if(SDL_NumJoysticks() > 1) {
-		logInfo("%d joysticks were found:\n", SDL_NumJoysticks());
+		logInfo("%d joysticks were found:", SDL_NumJoysticks());
 	}
 	else {
-		logInfo("No joysticks were found.\n");
+		logInfo("No joysticks were found.");
 		ENABLE_JOYSTICK = false;
 	}
 	for(int i = 0; i < SDL_NumJoysticks(); i++) {
-		logInfo("  Joy %d) %s\n", i, inpt->getJoystickName(i).c_str());
+		logInfo("  Joy %d) %s", i, inpt->getJoystickName(i).c_str());
 	}
 	if ((ENABLE_JOYSTICK) && (SDL_NumJoysticks() > 0)) {
 		joy = SDL_JoystickOpen(JOYSTICK_DEVICE);
-		logInfo("Using joystick #%d.\n", JOYSTICK_DEVICE);
+		logInfo("Using joystick #%d.", JOYSTICK_DEVICE);
 	}
 
 	// Set sound effects volume from settings file
@@ -154,6 +152,11 @@ static void mainLoop (bool debug_event) {
 
 			SDL_PumpEvents();
 			inpt->handle(debug_event);
+
+			// Skip game logic when minimized on Android
+			if (inpt->window_minimized && !inpt->window_restored)
+				break;
+
 			gswitch->logic();
 			inpt->resetScroll();
 
@@ -163,6 +166,22 @@ static void mainLoop (bool debug_event) {
 
 			logic_ticks += delay;
 			loops++;
+
+			// Android only
+			// When the app is minimized on Android, no logic gets processed.
+			// As a result, the delta time when restoring the app is large, so the game will skip frames and appear to be running fast.
+			// To counter this, we reset our delta time here when restoring the app
+			if (inpt->window_minimized && inpt->window_restored) {
+				logic_ticks = now_ticks = SDL_GetTicks();
+				inpt->window_minimized = inpt->window_restored = false;
+				break;
+			}
+
+			// don't skip frames if the game is paused
+			if (gswitch->isPaused()) {
+				logic_ticks = now_ticks;
+				break;
+			}
 		}
 
 		render_device->blankScreen();
@@ -211,8 +230,8 @@ static void cleanup() {
 	SDL_Quit();
 }
 
-string parseArg(const string &arg) {
-	string result = "";
+std::string parseArg(const std::string &arg) {
+	std::string result = "";
 
 	// arguments must start with '--'
 	if (arg.length() > 2 && arg[0] == '-' && arg[1] == '-') {
@@ -225,8 +244,8 @@ string parseArg(const string &arg) {
 	return result;
 }
 
-string parseArgValue(const string &arg) {
-	string result = "";
+std::string parseArgValue(const std::string &arg) {
+	std::string result = "";
 	bool found_equals = false;
 
 	for (unsigned i = 0; i < arg.length(); ++i) {
@@ -245,7 +264,7 @@ int main(int argc, char *argv[]) {
 	std::string render_device_name = "";
 
 	for (int i = 1 ; i < argc; i++) {
-		string arg = string(argv[i]);
+		std::string arg = std::string(argv[i]);
 		if (parseArg(arg) == "debug-event") {
 			debug_event = true;
 		}
@@ -263,11 +282,12 @@ int main(int argc, char *argv[]) {
 		}
 		else if (parseArg(arg) == "help") {
 			printf("\
---help           Prints this message.\n\n\
---version        Prints the release version.\n\n\
---data-path      Specifies an exact path to look for mod data.\n\n\
---debug-event    Prints verbose hardware input information.\n\n\
---renderer       Specifies the rendering backend to use. The default is 'sdl'.\n");
+--help                   Prints this message.\n\n\
+--version                Prints the release version.\n\n\
+--data-path=<PATH>       Specifies an exact path to look for mod data.\n\n\
+--debug-event            Prints verbose hardware input information.\n\n\
+--renderer=<RENDERER>    Specifies the rendering backend to use.\n\
+                         The default is 'sdl'.\n");
 			done = true;
 		}
 	}
@@ -276,6 +296,10 @@ int main(int argc, char *argv[]) {
 		srand((unsigned int)time(NULL));
 		init(render_device_name);
 		mainLoop(debug_event);
+
+		if (gswitch)
+			gswitch->saveUserSettings();
+
 		cleanup();
 	}
 

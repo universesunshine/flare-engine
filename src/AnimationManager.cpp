@@ -20,10 +20,8 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include <cassert>
 
-using namespace std;
-
-AnimationSet *AnimationManager::getAnimationSet(const string& filename) {
-	vector<string>::iterator found = find(names.begin(), names.end(), filename);
+AnimationSet *AnimationManager::getAnimationSet(const std::string& filename) {
+	std::vector<std::string>::iterator found = find(names.begin(), names.end(), filename);
 	if (found != names.end()) {
 		int index = distance(names.begin(), found);
 		if (sets[index] == 0) {
@@ -32,7 +30,7 @@ AnimationSet *AnimationManager::getAnimationSet(const string& filename) {
 		return sets[index];
 	}
 	else {
-		logError("AnimationManager::getAnimationSet: %s not found\n", filename.c_str());
+		logError("AnimationManager::getAnimationSet: %s not found", filename.c_str());
 		SDL_Quit();
 		exit(1);
 		// return 0;
@@ -47,16 +45,16 @@ AnimationManager::~AnimationManager() {
 // NDEBUG is used by posix to disable assertions, so use the same MACRO.
 #ifndef NDEBUG
 	if (!names.empty()) {
-		logError("AnimationManager: Still holding these animations:\n");
+		logError("AnimationManager: Still holding these animations:");
 		for (unsigned i = 0; i < names.size(); i++)
-			logError("%s %d\n", names[i].c_str(), counts[i]);
+			logError("%s %d", names[i].c_str(), counts[i]);
 	}
 	assert(names.size() == 0);
 #endif
 }
 
 void AnimationManager::increaseCount(const std::string &name) {
-	vector<string>::iterator found = find(names.begin(), names.end(), name);
+	std::vector<std::string>::iterator found = find(names.begin(), names.end(), name);
 	if (found != names.end()) {
 		int index = distance(names.begin(), found);
 		counts[index]++;
@@ -70,13 +68,13 @@ void AnimationManager::increaseCount(const std::string &name) {
 
 void AnimationManager::decreaseCount(const std::string &name) {
 
-	vector<string>::iterator found = find(names.begin(), names.end(), name);
+	std::vector<std::string>::iterator found = find(names.begin(), names.end(), name);
 	if (found != names.end()) {
 		int index = distance(names.begin(), found);
 		counts[index]--;
 	}
 	else {
-		logError("AnimationManager::decreaseCount: %s not found\n", name.c_str());
+		logError("AnimationManager::decreaseCount: %s not found", name.c_str());
 		SDL_Quit();
 		exit(1);
 	}

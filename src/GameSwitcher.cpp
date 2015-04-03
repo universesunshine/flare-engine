@@ -41,8 +41,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include <typeinfo>
 
-using namespace std;
-
 GameSwitcher::GameSwitcher() {
 
 	// The initial state is the intro cutscene and then title screen
@@ -83,7 +81,7 @@ void GameSwitcher::loadMusic() {
 		if (music_filename != "") {
 			music = Mix_LoadMUS((mods->locate(music_filename)).c_str());
 			if (!music)
-				logError("GameSwitcher: Mix_LoadMUS: %s\n", Mix_GetError());
+				logError("GameSwitcher: Mix_LoadMUS: %s", Mix_GetError());
 		}
 	}
 
@@ -128,8 +126,10 @@ void GameSwitcher::logic() {
 void GameSwitcher::showFPS(int fps) {
 	if (SHOW_FPS) {
 		if (!label_fps) label_fps = new WidgetLabel();
-		string sfps = toString(typeid(fps), &fps) + string(" fps");
-		label_fps->set(fps_position.x, fps_position.y, JUSTIFY_LEFT, VALIGN_TOP, sfps, fps_color);
+		std::string sfps = toString(typeid(fps), &fps) + std::string(" fps");
+		Rect pos = fps_position;
+		alignToScreenEdge(fps_corner, &pos);
+		label_fps->set(pos.x, pos.y, JUSTIFY_LEFT, VALIGN_TOP, sfps, fps_color);
 		label_fps->render();
 	}
 }
@@ -144,7 +144,7 @@ void GameSwitcher::loadFPS() {
 			if(infile.key == "position") {
 				fps_position.x = popFirstInt(infile.val);
 				fps_position.y = popFirstInt(infile.val);
-				fps_corner = popFirstString(infile.val);
+				fps_corner = parse_alignment(popFirstString(infile.val));
 			}
 			// @ATTR color|r (integer), g (integer), b (integer)|Color of the fps counter text.
 			else if(infile.key == "color") {
@@ -162,8 +162,6 @@ void GameSwitcher::loadFPS() {
 	fps_position.w = font->calc_width("00 fps");
 	fps_position.h = font->getLineHeight();
 
-	alignToScreenEdge(fps_corner, &fps_position);
-
 	// Delete the label object if it exists (we'll recreate this with showFPS())
 	if (label_fps) {
 		delete label_fps;
@@ -180,9 +178,18 @@ bool GameSwitcher::isLoadingFrame() {
 	return false;
 }
 
+bool GameSwitcher::isPaused() {
+	return currentState->isPaused();
+}
+
 void GameSwitcher::render() {
 	currentState->render();
 	curs->render();
+}
+
+void GameSwitcher::saveUserSettings() {
+	if (currentState && currentState->save_settings_on_exit)
+		saveSettings();
 }
 
 GameSwitcher::~GameSwitcher() {

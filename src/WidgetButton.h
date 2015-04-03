@@ -54,10 +54,11 @@ private:
 	TooltipData checkTooltip(Point mouse);
 
 public:
-	WidgetButton(const std::string& _fileName);
+	WidgetButton(const std::string& _fileName = "images/menus/buttons/button_default.png");
 	~WidgetButton();
 
 	void activate();
+	void setPos(int offset_x = 0, int offset_y = 0);
 
 	void loadArt();
 	bool checkClick();

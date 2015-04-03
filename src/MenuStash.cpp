@@ -31,9 +31,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "WidgetButton.h"
 #include "SharedGameResources.h"
 
-using namespace std;
-
-
 MenuStash::MenuStash(StatBlock *_stats)
 	: Menu()
 	, stats(_stats)
@@ -59,7 +56,8 @@ MenuStash::MenuStash(StatBlock *_stats)
 
 			// @ATTR close|x (integer), y (integer)|Position of the close button.
 			if (infile.key == "close") {
-				close_pos = toPoint(infile.val);
+				Point pos = toPoint(infile.val);
+				closeButton->setBasePos(pos.x, pos.y);
 			}
 			// @ATTR slots_area|x (integer), y (integer)|Position of the top-left slot.
 			else if (infile.key == "slots_area") {
@@ -68,11 +66,11 @@ MenuStash::MenuStash(StatBlock *_stats)
 			}
 			// @ATTR stash_cols|integer|The number of columns for the grid of slots.
 			else if (infile.key == "stash_cols") {
-				slots_cols = max(1, toInt(infile.val));
+				slots_cols = std::max(1, toInt(infile.val));
 			}
 			// @ATTR stash_rows|integer|The number of rows for the grid of slots.
 			else if (infile.key == "stash_rows") {
-				slots_rows = max(1, toInt(infile.val));
+				slots_rows = std::max(1, toInt(infile.val));
 			}
 			// @ATTR label_title|label|Position of the "Stash" label.
 			else if (infile.key == "label_title") {
@@ -90,25 +88,22 @@ MenuStash::MenuStash(StatBlock *_stats)
 	}
 
 	STASH_SLOTS = slots_cols * slots_rows;
-
-	align();
-	alignElements();
-}
-
-void MenuStash::alignElements() {
-	slots_area.x += window_area.x;
-	slots_area.y += window_area.y;
 	slots_area.w = slots_cols*ICON_SIZE;
 	slots_area.h = slots_rows*ICON_SIZE;
 
 	stock.init( STASH_SLOTS, slots_area, ICON_SIZE, slots_cols);
-
-	closeButton->pos.x = window_area.x+close_pos.x;
-	closeButton->pos.y = window_area.y+close_pos.y;
-
 	for (int i = 0; i < STASH_SLOTS; i++) {
 		tablist.add(stock.slots[i]);
 	}
+
+	align();
+}
+
+void MenuStash::align() {
+	Menu::align();
+
+	closeButton->setPos(window_area.x, window_area.y);
+	stock.setPos(window_area.x, window_area.y);
 }
 
 void MenuStash::logic() {

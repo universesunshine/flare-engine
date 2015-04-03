@@ -37,17 +37,15 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include <climits>
 #include <cstring>
 
-using namespace std;
-
 /**
  * Resizes vector vec, so it can fit index id.
  */
 template <typename Ty_>
-static inline void ensureFitsId(vector<Ty_>& vec, int id) {
+static inline void ensureFitsId(std::vector<Ty_>& vec, int id) {
 	// id's are always greater or equal 1;
 	if (id < 1) return;
 
-	typedef typename vector<Ty_>::size_type VecSz;
+	typedef typename std::vector<Ty_>::size_type VecSz;
 
 	if (vec.size() <= VecSz(id+1))
 		vec.resize(id+1);
@@ -105,8 +103,8 @@ void ItemManager::loadAll() {
 	shrinkVecToFit(item_sets);
 
 	// do we need to print these messages?
-	if (items.empty()) logInfo("ItemManager: No items were found.\n");
-	if (item_sets.empty()) logInfo("ItemManager: No item sets were found.\n");
+	if (items.empty()) logInfo("ItemManager: No items were found.");
+	if (item_sets.empty()) logInfo("ItemManager: No item sets were found.");
 }
 
 /**
@@ -230,7 +228,7 @@ void ItemManager::loadItems() {
 				items[id].req_val.clear();
 				clear_req_stat = false;
 			}
-			string s = infile.nextValue();
+			std::string s = infile.nextValue();
 			if (s == "physical")
 				items[id].req_stat.push_back(REQUIRES_PHYS);
 			else if (s == "mental")
@@ -240,7 +238,7 @@ void ItemManager::loadItems() {
 			else if (s == "defense")
 				items[id].req_stat.push_back(REQUIRES_DEF);
 			else
-				infile.error("%s unrecognized at; requires_stat must be one of [physical:mental:offense:defense]\n", s.c_str());
+				infile.error("%s unrecognized at; requires_stat must be one of [physical:mental:offense:defense]", s.c_str());
 			items[id].req_val.push_back(toInt(infile.nextValue()));
 		}
 		else if (infile.key == "requires_class") {
@@ -258,14 +256,14 @@ void ItemManager::loadItems() {
 			items[id].bonus_val.push_back(toInt(infile.nextValue()));
 		}
 		else if (infile.key == "soundfx") {
-			// @ATTR soundfx|string|Sound effect for the specific item.
+			// @ATTR soundfx|string|Sound effect filename to play for the specific item.
 			items[id].sfx = snd->load(infile.val, "ItemManager");
 		}
 		else if (infile.key == "gfx")
-			// @ATTR gfx|string|Graphics for the specific item.
+			// @ATTR gfx|string|Filename of an animation set to display when the item is equipped.
 			items[id].gfx = infile.val;
 		else if (infile.key == "loot_animation") {
-			// @ATTR loot_animation|filename (string), min quantity (int), max quantity (int)|Specifies the loot animation for the item. The max quantity, or both quantity values, may be omitted.
+			// @ATTR loot_animation|filename (string), min quantity (int), max quantity (int)|Specifies the loot animation file for the item. The max quantity, or both quantity values, may be omitted.
 			if (clear_loot_anim) {
 				items[id].loot_animation.clear();
 				clear_loot_anim = false;
@@ -299,17 +297,11 @@ void ItemManager::loadItems() {
 			// @ATTR price|integer|The amount of currency the item costs, if set to 0 the item cannot be sold.
 			items[id].price = toInt(infile.val);
 		else if (infile.key == "price_sell")
-			// @ATTR sell_price|integer|The amount of currency the item is sold for, if set to 0 the sell prices is prices*vendor_ratio.
+			// @ATTR price_sell|integer|The amount of currency the item is sold for, if set to 0 the sell prices is prices*vendor_ratio.
 			items[id].price_sell = toInt(infile.val);
 		else if (infile.key == "max_quantity")
 			// @ATTR max_quantity|integer|Max item count per stack.
 			items[id].max_quantity = toInt(infile.val);
-		else if (infile.key == "rand_loot")
-			// @ATTR rand_loot|integer|Max amount appearing in loot stack.
-			items[id].rand_loot = toInt(infile.val);
-		else if (infile.key == "rand_vendor")
-			// @ATTR rand_vendor|integer|Max amount appearing in vendor stack.
-			items[id].rand_vendor = toInt(infile.val);
 		else if (infile.key == "pickup_status")
 			// @ATTR pickup_status|string|Set a campaign status when item is picked up, this is used for quest items.
 			items[id].pickup_status = infile.val;
@@ -336,7 +328,7 @@ void ItemManager::loadItems() {
 
 void ItemManager::loadTypes() {
 	FileParser infile;
-	string type,description;
+	std::string type,description;
 	type = description = "";
 
 	// @CLASS ItemManager: Types|Definition of a item types, items/types.txt...
@@ -360,8 +352,8 @@ void ItemManager::loadTypes() {
 	}
 }
 
-string ItemManager::getItemType(std::string _type) {
-	map<string,string>::iterator it,end;
+std::string ItemManager::getItemType(std::string _type) {
+	std::map<std::string, std::string>::iterator it,end;
 	for (it=item_types.begin(), end=item_types.end(); it!=end; ++it) {
 		if (_type.compare(it->first) == 0) return it->second;
 	}
@@ -409,9 +401,9 @@ void ItemManager::loadSets() {
 			item_sets[id].name = msg->get(infile.val);
 		}
 		else if (infile.key == "items") {
-			// @ATTR name|[item_id,...]|List of item id's that is part of the set.
+			// @ATTR items|[item_id,...]|List of item id's that is part of the set.
 			item_sets[id].items.clear();
-			string item_id = infile.nextValue();
+			std::string item_id = infile.nextValue();
 			while (item_id != "") {
 				int temp_id = toInt(item_id);
 				if (temp_id > 0 && temp_id < static_cast<int>(items.size())) {
@@ -453,7 +445,7 @@ void ItemManager::playSound(int item, Point pos) {
 }
 
 TooltipData ItemManager::getShortTooltip(ItemStack stack) {
-	stringstream ss;
+	std::stringstream ss;
 	TooltipData tip;
 	Color color = color_normal;
 
@@ -491,7 +483,7 @@ TooltipData ItemManager::getShortTooltip(ItemStack stack) {
 TooltipData ItemManager::getTooltip(ItemStack stack, StatBlock *stats, int context) {
 	TooltipData tip;
 	Color color = color_normal;
-	string quality_desc = "";
+	std::string quality_desc = "";
 
 	if (stack.empty()) return tip;
 
@@ -517,7 +509,7 @@ TooltipData ItemManager::getTooltip(ItemStack stack, StatBlock *stats, int conte
 	}
 
 	// name
-	stringstream ss;
+	std::stringstream ss;
 	if (stack.quantity == 1)
 		ss << items[stack.item].name;
 	else
@@ -564,7 +556,7 @@ TooltipData ItemManager::getTooltip(ItemStack stack, StatBlock *stats, int conte
 
 	// bonuses
 	unsigned bonus_counter = 0;
-	string modifier;
+	std::string modifier;
 	while (bonus_counter < items[stack.item].bonus_val.size() && items[stack.item].bonus_stat[bonus_counter] != "") {
 		if (items[stack.item].bonus_stat[bonus_counter] == "speed") {
 			modifier = msg->get("%d%% Speed", items[stack.item].bonus_val[bonus_counter]);
@@ -760,11 +752,11 @@ bool ItemStack::empty() {
 		return false;
 	}
 	else if (item == 0 && quantity != 0) {
-		logError("ItemStack: Item id is zero, but quantity is %d.\n", quantity);
+		logError("ItemStack: Item id is zero, but quantity is %d.", quantity);
 		quantity = 0;
 	}
 	else if (item != 0 && quantity == 0) {
-		logError("ItemStack: Item id is %d, but quantity is zero.\n", item);
+		logError("ItemStack: Item id is %d, but quantity is zero.", item);
 		item = 0;
 	}
 	return true;

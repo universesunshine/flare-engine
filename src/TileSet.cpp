@@ -32,8 +32,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include <cstdio>
 
-using namespace std;
-
 TileSet::TileSet()
 	: sprites(NULL) {
 	reset();
@@ -130,14 +128,14 @@ void TileSet::load(const std::string& filename) {
 
 			}
 			else if (infile.key == "animation") {
-				// @ATTR animation|tile index (integer), x (integer), y (integer), duration (duration), ...|An animation for a tile.
+				// @ATTR animation|tile index (integer), x (integer), y (integer), duration (duration), ...|An animation for a tile. Durations are in 'ms' or 's'.
 				int frame = 0;
 				unsigned TILE_ID = toInt(infile.nextValue());
 
 				if (TILE_ID >= anim.size())
 					anim.resize(TILE_ID + 1);
 
-				string repeat_val = infile.nextValue();
+				std::string repeat_val = infile.nextValue();
 				while (repeat_val != "") {
 					anim[TILE_ID].frames++;
 					anim[TILE_ID].pos.resize(frame + 1);

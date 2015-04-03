@@ -25,8 +25,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "WidgetLog.h"
 #include "WidgetScrollBox.h"
 
-using namespace std;
-
 WidgetLog::WidgetLog (int width, int height)
 	: scroll_box(new WidgetScrollBox(width, height))
 	, padding(4)
@@ -40,6 +38,16 @@ WidgetLog::WidgetLog (int width, int height)
 
 WidgetLog::~WidgetLog () {
 	delete scroll_box;
+}
+
+void WidgetLog::setBasePos(int x, int y, ALIGNMENT a) {
+	Widget::setBasePos(x, y, a);
+	scroll_box->setBasePos(x, y, a);
+}
+
+void WidgetLog::setPos(int offset_x, int offset_y) {
+	Widget::setPos(offset_x, offset_y);
+	scroll_box->setPos(offset_x, offset_y);
 }
 
 void WidgetLog::logic() {
@@ -72,7 +80,7 @@ void WidgetLog::refresh() {
 		y += size.y+paragraph_spacing;
 	}
 	y+=padding;
-	scroll_box->resize(y);
+	scroll_box->resize(scroll_box->pos.w, y);
 
 	// Render messages into the scrollbox area
 	for (unsigned int i = messages.size(); i > 0; i--) {

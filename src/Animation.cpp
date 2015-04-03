@@ -29,8 +29,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include "Animation.h"
 
-using namespace std;
-
 Animation::Animation(const std::string &_name, const std::string &_type, Image *_sprite)
 	: name(_name)
 	, type(	_type == "play_once" ? PLAY_ONCE :
@@ -49,9 +47,10 @@ Animation::Animation(const std::string &_name, const std::string &_type, Image *
 	, render_offset()
 	, frames()
 	, active_frames()
-	, elapsed_frames(0) {
+	, elapsed_frames(0)
+	, frame_count(0) {
 	if (type == NONE)
-		logError("Animation: Type %s is unknown\n", _type.c_str());
+		logError("Animation: Type %s is unknown", _type.c_str());
 }
 
 Animation::Animation(const Animation& a)
@@ -69,7 +68,8 @@ Animation::Animation(const Animation& a)
 	, render_offset(std::vector<Point>(a.render_offset))
 	, frames(std::vector<unsigned short>(a.frames))
 	, active_frames(std::vector<short>(a.active_frames))
-	, elapsed_frames(0) {
+	, elapsed_frames(0)
+	, frame_count(0) {
 }
 
 void Animation::setupUncompressed(Point _render_size, Point _render_offset, int _position, int _frames, int _duration, unsigned short _maxkinds) {
@@ -112,27 +112,27 @@ void Animation::setup(unsigned short _frames, unsigned short _duration, unsigned
 
 	active_frames.push_back(number_frames/2);
 
-	gfx.resize(max_kinds*_frames);
-	render_offset.resize(max_kinds*_frames);
+	unsigned i = max_kinds*_frames;
+	gfx.resize(i);
+	render_offset.resize(i);
 }
 
-void Animation::addFrame(	unsigned short index,
-							unsigned short kind,
-							Rect rect,
-							Point _render_offset) {
+void Animation::addFrame(unsigned short index, unsigned short kind, Rect rect, Point _render_offset) {
 
 	if (index >= gfx.size()/max_kinds) {
-		logError("Animation: Animation(%s) adding rect(%d, %d, %d, %d) to frame index(%u) out of bounds. must be in [0, %d]\n",
+		logError("Animation: Animation(%s) adding rect(%d, %d, %d, %d) to frame index(%u) out of bounds. must be in [0, %d]",
 				name.c_str(), rect.x, rect.y, rect.w, rect.h, index, (int)gfx.size()/max_kinds);
 		return;
 	}
 	if (kind > max_kinds-1) {
-		logError("Animation: Animation(%s) adding rect(%d, %d, %d, %d) to frame(%u) kind(%u) out of bounds. must be in [0, %d]\n",
+		logError("Animation: Animation(%s) adding rect(%d, %d, %d, %d) to frame(%u) kind(%u) out of bounds. must be in [0, %d]",
 				name.c_str(), rect.x, rect.y, rect.w, rect.h, index, kind, max_kinds-1);
 		return;
 	}
-	gfx[max_kinds*index+kind] = rect;
-	render_offset[max_kinds*index+kind] = _render_offset;
+
+	unsigned i = max_kinds*index+kind;
+	gfx[i] = rect;
+	render_offset[i] = _render_offset;
 }
 
 void Animation::advanceFrame() {
@@ -225,12 +225,12 @@ bool Animation::syncTo(const Animation *other) {
 
 	if (cur_frame_index >= frames.size()) {
 		if (frames.empty()) {
-			logError("Animation: '%s' animation has no frames, but current frame index is greater than 0.\n", name.c_str());
+			logError("Animation: '%s' animation has no frames, but current frame index is greater than 0.", name.c_str());
 			cur_frame_index = 0;
 			return false;
 		}
 		else {
-			logError("Animation: Current frame index (%d) was larger than the last frame index (%d) when syncing '%s' animation.\n", cur_frame_index, frames.size()-1, name.c_str());
+			logError("Animation: Current frame index (%d) was larger than the last frame index (%d) when syncing '%s' animation.", cur_frame_index, frames.size()-1, name.c_str());
 			cur_frame_index = frames.size()-1;
 			return false;
 		}

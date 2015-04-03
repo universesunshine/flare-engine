@@ -33,14 +33,11 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "WidgetTabControl.h"
 #include "SharedGameResources.h"
 
-using namespace std;
-
-
 MenuVendor::MenuVendor(StatBlock *_stats)
 	: Menu()
 	, stats(_stats)
 	, closeButton(new WidgetButton("images/menus/buttons/button_x.png"))
-	, tabControl(new WidgetTabControl(2))
+	, tabControl(new WidgetTabControl())
 	, slots_cols(1)
 	, slots_rows(1)
 	, activetab(VENDOR_BUY)
@@ -49,8 +46,8 @@ MenuVendor::MenuVendor(StatBlock *_stats)
 	, buyback_stock() {
 	setBackground("images/menus/vendor.png");
 
-	tabControl->setTabTitle(VENDOR_BUY,msg->get("Inventory"));
-	tabControl->setTabTitle(VENDOR_SELL,msg->get("Buyback"));
+	tabControl->setTabTitle(VENDOR_BUY, msg->get("Inventory"));
+	tabControl->setTabTitle(VENDOR_SELL, msg->get("Buyback"));
 
 	// Load config settings
 	FileParser infile;
@@ -62,7 +59,8 @@ MenuVendor::MenuVendor(StatBlock *_stats)
 
 			// @ATTR close|x (integer), y (integer)|Position of the close button.
 			if(infile.key == "close") {
-				close_pos = toPoint(infile.val);
+				Point pos = toPoint(infile.val);
+				closeButton->setBasePos(pos.x, pos.y);
 			}
 			// @ATTR slots_area|x (integer), y (integer)|Position of the top-left slot.
 			else if(infile.key == "slots_area") {
@@ -71,11 +69,11 @@ MenuVendor::MenuVendor(StatBlock *_stats)
 			}
 			// @ATTR vendor_cols|integer|The number of columns in the grid of slots.
 			else if (infile.key == "vendor_cols") {
-				slots_cols = max(1, toInt(infile.val));
+				slots_cols = std::max(1, toInt(infile.val));
 			}
 			// @ATTR vendor_rows|integer|The number of rows in the grid of slots.
 			else if (infile.key == "vendor_rows") {
-				slots_rows = max(1, toInt(infile.val));
+				slots_rows = std::max(1, toInt(infile.val));
 			}
 			// @ATTR label_title|label|The position of the text that displays the NPC's name.
 			else if (infile.key == "label_title") {
@@ -89,28 +87,12 @@ MenuVendor::MenuVendor(StatBlock *_stats)
 	}
 
 	VENDOR_SLOTS = slots_cols * slots_rows;
-	align();
-	alignElements();
-}
-
-void MenuVendor::alignElements() {
-	slots_area.x += window_area.x;
-	slots_area.y += window_area.y;
 	slots_area.w = slots_cols*ICON_SIZE;
 	slots_area.h = slots_rows*ICON_SIZE;
 
-	Rect tabs_area = slots_area;
-
-	int tabheight = tabControl->getTabHeight();
-	tabControl->setMainArea(tabs_area.x, tabs_area.y-tabheight, tabs_area.w, tabs_area.h+tabheight);
-	tabControl->updateHeader();
-
-	stock[VENDOR_BUY].init( VENDOR_SLOTS, slots_area, ICON_SIZE, slots_cols);
-	stock[VENDOR_SELL].init( VENDOR_SLOTS, slots_area, ICON_SIZE, slots_cols);
+	stock[VENDOR_BUY].init(VENDOR_SLOTS, slots_area, ICON_SIZE, slots_cols);
+	stock[VENDOR_SELL].init(VENDOR_SLOTS, slots_area, ICON_SIZE, slots_cols);
 	buyback_stock.init(NPC_VENDOR_MAX_STOCK);
-
-	closeButton->pos.x = window_area.x+close_pos.x;
-	closeButton->pos.y = window_area.y+close_pos.y;
 
 	for (unsigned i = 0; i < VENDOR_SLOTS; i++) {
 		tablist.add(stock[VENDOR_BUY].slots[i]);
@@ -118,6 +100,25 @@ void MenuVendor::alignElements() {
 	for (unsigned i = 0; i < VENDOR_SLOTS; i++) {
 		tablist.add(stock[VENDOR_SELL].slots[i]);
 	}
+
+	align();
+}
+
+void MenuVendor::align() {
+	Menu::align();
+
+	Rect tabs_area = slots_area;
+	tabs_area.x += window_area.x;
+	tabs_area.y += window_area.y;
+
+	int tabheight = tabControl->getTabHeight();
+	tabControl->setMainArea(tabs_area.x, tabs_area.y-tabheight, tabs_area.w, tabs_area.h+tabheight);
+	tabControl->updateHeader();
+
+	closeButton->setPos(window_area.x, window_area.y);
+
+	stock[VENDOR_BUY].setPos(window_area.x, window_area.y);
+	stock[VENDOR_SELL].setPos(window_area.x, window_area.y);
 }
 
 void MenuVendor::logic() {
@@ -145,7 +146,7 @@ void MenuVendor::logic() {
 	}
 
 	if (closeButton->checkClick()) {
-		visible = false;
+		setNPC(NULL);
 		snd->play(sfx_close);
 	}
 }
@@ -268,6 +269,23 @@ void MenuVendor::sort(int type) {
 
 int MenuVendor::getRowsCount() {
 	return slots_rows;
+}
+
+void MenuVendor::setNPC(NPC* _npc) {
+	npc = _npc;
+
+	if (_npc == NULL) {
+		visible = false;
+		return;
+	}
+
+	setTab(0);
+	setInventory();
+	if (!visible) {
+		visible = true;
+		snd->play(sfx_open);
+		npc->playSound(NPC_VOX_INTRO);
+	}
 }
 
 MenuVendor::~MenuVendor() {

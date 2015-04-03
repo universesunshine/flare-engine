@@ -26,8 +26,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "WidgetButton.h"
 #include "WidgetTooltip.h"
 
-using namespace std;
-
 WidgetButton::WidgetButton(const std::string& _fileName)
 	: Widget()
 	, fileName(_fileName)
@@ -49,6 +47,11 @@ WidgetButton::WidgetButton(const std::string& _fileName)
 
 void WidgetButton::activate() {
 	pressed = true;
+}
+
+void WidgetButton::setPos(int offset_x, int offset_y) {
+	Widget::setPos(offset_x, offset_y);
+	refresh();
 }
 
 void WidgetButton::loadArt() {

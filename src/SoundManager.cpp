@@ -34,8 +34,6 @@ will be returned by SoundManager::load().
 #include <locale>
 #include <math.h>
 
-using namespace std;
-
 class Sound {
 public:
 	Mix_Chunk *chunk;
@@ -64,7 +62,7 @@ public:
 };
 
 SoundManager::SoundManager() {
-	Mix_AllocateChannels(50);
+	Mix_AllocateChannels(128);
 }
 
 SoundManager::~SoundManager() {
@@ -165,8 +163,8 @@ SoundManager::SoundID SoundManager::load(const std::string& filename, const std:
 	if (!AUDIO || !SOUND_VOLUME)
 		return 0;
 
-	const collate<char>& coll = use_facet<collate<char> >(loc);
-	const string realfilename = mods->locate(filename);
+	const std::collate<char>& coll = std::use_facet<std::collate<char> >(loc);
+	const std::string realfilename = mods->locate(filename);
 
 	/* create sid hash and check if already loaded */
 	sid = coll.hash(realfilename.data(), realfilename.data()+realfilename.length());
@@ -180,7 +178,7 @@ SoundManager::SoundID SoundManager::load(const std::string& filename, const std:
 	lsnd.chunk = Mix_LoadWAV(realfilename.c_str());
 	lsnd.refCnt = 1;
 	if (!lsnd.chunk) {
-		logError("SoundManager: %s: Loading sound %s (%s) failed: %s \n", errormessage.c_str(),
+		logError("SoundManager: %s: Loading sound %s (%s) failed: %s", errormessage.c_str(),
 				realfilename.c_str(), filename.c_str(), Mix_GetError());
 		return 0;
 	}
@@ -188,7 +186,7 @@ SoundManager::SoundID SoundManager::load(const std::string& filename, const std:
 	/* instantiate and add sound to manager */
 	Sound *psnd = new Sound;
 	*psnd = lsnd;
-	sounds.insert(pair<SoundID,Sound *>(sid, psnd));
+	sounds.insert(std::pair<SoundID,Sound *>(sid, psnd));
 
 	return sid;
 }
@@ -236,7 +234,7 @@ void SoundManager::play(SoundManager::SoundID sid, std::string channel, FPoint p
 		if (vcit != channels.end())
 			Mix_HaltChannel(vcit->second);
 
-		vcit = channels.insert(pair<std::string, int>(p.virtual_channel, -1)).first;
+		vcit = channels.insert(std::pair<std::string, int>(p.virtual_channel, -1)).first;
 	}
 
 	// Let playback own a reference to prevent unloading playbacked sound.
@@ -247,7 +245,7 @@ void SoundManager::play(SoundManager::SoundID sid, std::string channel, FPoint p
 	int c = Mix_PlayChannel(-1, it->second->chunk, (loop ? -1 : 0));
 
 	if (c == -1)
-		logError("SoundManager: Failed to play sound, no more channels available.\n");
+		logError("SoundManager: Failed to play sound, no more channels available.");
 
 	// precalculate mixing volume if sound has a location
 	Uint8 d = 0;
@@ -262,7 +260,7 @@ void SoundManager::play(SoundManager::SoundID sid, std::string channel, FPoint p
 	if (vcit != channels.end())
 		vcit->second = c;
 
-	playback.insert(pair<int, Playback>(c, p));
+	playback.insert(std::pair<int, Playback>(c, p));
 }
 
 void SoundManager::on_channel_finished(int channel) {

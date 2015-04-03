@@ -38,8 +38,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "UtilsParsing.h"
 #include "SharedGameResources.h"
 
-using namespace std;
-
 Avatar::Avatar()
 	: Entity()
 	, lockAttack(false)
@@ -146,7 +144,7 @@ void Avatar::init() {
 	last_transform = "";
 	untransform_power = getUntransformPower();
 
-	hero_cooldown = vector<int>(powers->powers.size(), 0);
+	hero_cooldown = std::vector<int>(powers->powers.size(), 0);
 
 }
 
@@ -154,8 +152,8 @@ void Avatar::init() {
  * Load avatar sprite layer definitions into vector.
  */
 void Avatar::loadLayerDefinitions() {
-	layer_def = vector<vector<unsigned> >(8, vector<unsigned>());
-	layer_reference_order = vector<string>();
+	layer_def = std::vector<std::vector<unsigned> >(8, std::vector<unsigned>());
+	layer_reference_order = std::vector<std::string>();
 
 	FileParser infile;
 	// @CLASS Avatar: Hero layers|Description of engine/hero_layers.txt
@@ -169,7 +167,7 @@ void Avatar::loadLayerDefinitions() {
 					SDL_Quit();
 					exit(1);
 				}
-				string layer = popFirstString(infile.val);
+				std::string layer = popFirstString(infile.val);
 				while (layer != "") {
 					// check if already in layer_reference:
 					unsigned ref_pos;
@@ -208,14 +206,14 @@ void Avatar::loadGraphics(std::vector<Layer_gfx> _img_gfx) {
 
 	for (unsigned int i=0; i<_img_gfx.size(); i++) {
 		if (_img_gfx[i].gfx != "") {
-			string name = "animations/avatar/"+stats.gfx_base+"/"+_img_gfx[i].gfx+".txt";
+			std::string name = "animations/avatar/"+stats.gfx_base+"/"+_img_gfx[i].gfx+".txt";
 			anim->increaseCount(name);
 			animsets.push_back(anim->getAnimationSet(name));
 			animsets.back()->setParent(animationSet);
 			anims.push_back(animsets.back()->getAnimation(activeAnimation->getName()));
 			setAnimation("stance");
 			if(!anims.back()->syncTo(activeAnimation)) {
-				logError("Avatar: Error syncing animation in '%s' to 'animations/hero.txt'.\n", animsets.back()->getName().c_str());
+				logError("Avatar: Error syncing animation in '%s' to 'animations/hero.txt'.", animsets.back()->getName().c_str());
 			}
 		}
 		else {
@@ -229,8 +227,8 @@ void Avatar::loadGraphics(std::vector<Layer_gfx> _img_gfx) {
 /**
  * Walking/running steps sound depends on worn armor
  */
-void Avatar::loadStepFX(const string& stepname) {
-	string filename = stats.sfx_step;
+void Avatar::loadStepFX(const std::string& stepname) {
+	std::string filename = stats.sfx_step;
 	if (stepname != "") {
 		filename = stepname;
 	}
@@ -259,7 +257,7 @@ void Avatar::loadStepFX(const string& stepname) {
 	}
 
 	// Could not find step sound fx
-	logError("Avatar: Could not find footstep sounds for '%s'.\n", filename.c_str());
+	logError("Avatar: Could not find footstep sounds for '%s'.", filename.c_str());
 }
 
 
@@ -389,9 +387,10 @@ void Avatar::handlePower(std::vector<ActionData> &action_queue) {
  * - calculate camera position based on avatar position
  *
  * @param action The actionbar power activated and the target.  action.power == 0 means no power.
- * @param restrictPowerUse rather or not to allow power usage on mouse1
+ * @param restrict_power_use Whether or not to allow power usage on mouse1
+ * @param npc True if the player is talking to an NPC. Can limit ability to move/attack in certain conditions
  */
-void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse) {
+void Avatar::logic(std::vector<ActionData> &action_queue, bool restrict_power_use, bool npc) {
 
 	// hazards are processed after Avatar and Enemy[]
 	// so process and clear sound effects from previous frames
@@ -443,7 +442,7 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse)
 	if (stats.level < (int)stats.xp_table.size() && stats.xp >= stats.xp_table[stats.level]) {
 		stats.level_up = true;
 		stats.level++;
-		stringstream ss;
+		std::stringstream ss;
 		ss << msg->get("Congratulations, you have reached level %d!", stats.level);
 		if (stats.level < stats.max_spendable_stat_points) {
 			ss << " " << msg->get("You may increase one attribute through the Character Menu.");
@@ -498,16 +497,18 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse)
 	if (target_anim && target_visible)
 		target_anim->advanceFrame();
 
-	// handle transformation
-	if (stats.transform_type != "" && stats.transform_type != "untransform" && stats.transformed == false) transform();
-	if (stats.transform_type != "" && stats.transform_duration == 0) untransform();
-
 	// change the cursor if we're attacking
 	if (action_queue.empty()) {
 		lock_cursor = false;
 	}
 	else if (lock_cursor) {
 		curs->setCursor(CURSOR_ATTACK);
+	}
+
+	// save a valid tile position in the event that we untransform on an invalid tile
+	if (stats.transformed && mapr->collider.is_valid_position(stats.pos.x,stats.pos.y,MOVEMENT_NORMAL, true)) {
+		transform_pos = stats.pos;
+		transform_map = mapr->getFilename();
 	}
 
 	switch(stats.cur_state) {
@@ -517,7 +518,7 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse)
 
 			// allowed to move or use powers?
 			if (MOUSE_MOVE) {
-				allowed_to_move = restrictPowerUse && (!inpt->lock[MAIN1] || drag_walking) && !lockAttack;
+				allowed_to_move = restrict_power_use && (!inpt->lock[MAIN1] || drag_walking) && !lockAttack && !npc;
 				allowed_to_use_power = !allowed_to_move;
 			}
 			else {
@@ -560,7 +561,7 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse)
 
 			// allowed to move or use powers?
 			if (MOUSE_MOVE) {
-				allowed_to_use_power = !(restrictPowerUse && !inpt->lock[MAIN1]);
+				allowed_to_use_power = !(restrict_power_use && !inpt->lock[MAIN1]);
 			}
 			else {
 				allowed_to_use_power = true;
@@ -667,12 +668,6 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrictPowerUse)
 				else {
 					log_msg = msg->get("You are defeated. Press Enter to continue.");
 				}
-
-				//once the player dies, kill off any remaining summons
-				for (unsigned int i=0; i < enemies->enemies.size(); i++) {
-					if(!enemies->enemies[i]->stats.corpse && enemies->enemies[i]->stats.hero_ally)
-						enemies->enemies[i]->InstantDeath();
-				}
 			}
 
 			if (activeAnimation->getTimesPlayed() >= 1 || activeAnimation->getName() != "die") {
@@ -740,7 +735,7 @@ void Avatar::transform() {
 		charmed_stats->load(el.type);
 	}
 	else {
-		logError("Avatar: Could not transform into creature type '%s'\n", stats.transform_type.c_str());
+		logError("Avatar: Could not transform into creature type '%s'", stats.transform_type.c_str());
 		stats.transform_type = "";
 		return;
 	}
@@ -755,9 +750,13 @@ void Avatar::transform() {
 	hero_stats = new StatBlock();
 	*hero_stats = stats;
 
+	// do not allow two copies of the summons list
+	hero_stats->summons.clear();
+
 	// replace some hero stats
 	stats.speed = charmed_stats->speed;
 	stats.flying = charmed_stats->flying;
+	stats.intangible = charmed_stats->intangible;
 	stats.humanoid = charmed_stats->humanoid;
 	stats.animations = charmed_stats->animations;
 	stats.powers_list = charmed_stats->powers_list;
@@ -771,42 +770,46 @@ void Avatar::transform() {
 	activeAnimation = animationSet->getAnimation();
 	stats.cur_state = AVATAR_STANCE;
 
-	// damage
-	clampFloor(stats.starting[STAT_DMG_MELEE_MIN], charmed_stats->starting[STAT_DMG_MELEE_MIN]);
-	clampFloor(stats.starting[STAT_DMG_MELEE_MAX], charmed_stats->starting[STAT_DMG_MELEE_MAX]);
-
-	clampFloor(stats.starting[STAT_DMG_MENT_MIN], charmed_stats->starting[STAT_DMG_MENT_MIN]);
-	clampFloor(stats.starting[STAT_DMG_MENT_MAX], charmed_stats->starting[STAT_DMG_MENT_MAX]);
-
-	clampFloor(stats.starting[STAT_DMG_RANGED_MIN], charmed_stats->starting[STAT_DMG_RANGED_MIN]);
-	clampFloor(stats.starting[STAT_DMG_RANGED_MAX], charmed_stats->starting[STAT_DMG_RANGED_MAX]);
-
-	// dexterity
-	clampFloor(stats.starting[STAT_ABS_MIN], charmed_stats->starting[STAT_ABS_MIN]);
-	clampFloor(stats.starting[STAT_ABS_MAX], charmed_stats->starting[STAT_ABS_MAX]);
-
-	clampFloor(stats.starting[STAT_AVOIDANCE], charmed_stats->starting[STAT_AVOIDANCE]);
-
-	clampFloor(stats.starting[STAT_ACCURACY], charmed_stats->starting[STAT_ACCURACY]);
-
-	clampFloor(stats.starting[STAT_CRIT], charmed_stats->starting[STAT_CRIT]);
+	// base stats
+	for (unsigned int i=0; i<STAT_COUNT; ++i) {
+		clampFloor(stats.starting[i], charmed_stats->starting[i]);
+	}
 
 	// resistances
-	for (unsigned int i=0; i<stats.vulnerable.size(); i++)
+	for (unsigned int i=0; i<stats.vulnerable.size(); i++) {
 		clampCeil(stats.vulnerable[i], charmed_stats->vulnerable[i]);
+	}
 
 	loadSounds(charmed_stats);
 	loadStepFX("NULL");
 
 	stats.applyEffects();
+
+	transform_pos = stats.pos;
+	transform_map = mapr->getFilename();
 }
 
 void Avatar::untransform() {
 	// calling a transform power locks the actionbar, so we unlock it here
 	inpt->unlockActionBar();
 
-	// Only allow untransform when on a valid tile
-	if (!mapr->collider.is_valid_position(stats.pos.x,stats.pos.y,MOVEMENT_NORMAL, true)) return;
+	// For timed transformations, move the player to the last valid tile when untransforming
+	mapr->collider.unblock(stats.pos.x, stats.pos.y);
+	if (!mapr->collider.is_valid_position(stats.pos.x,stats.pos.y,MOVEMENT_NORMAL, true)) {
+		log_msg = msg->get("Transformation expired. You have been moved back to a safe place.");
+		if (transform_map != mapr->getFilename()) {
+			mapr->teleportation = true;
+			mapr->teleport_mapname = transform_map;
+			mapr->teleport_destination.x = floor(transform_pos.x) + 0.5f;
+			mapr->teleport_destination.y = floor(transform_pos.y) + 0.5f;
+			transform_map = "";
+		}
+		else {
+			stats.pos.x = floor(transform_pos.x) + 0.5f;
+			stats.pos.y = floor(transform_pos.y) + 0.5f;
+		}
+	}
+	mapr->collider.block(stats.pos.x, stats.pos.y, false);
 
 	stats.transformed = false;
 	transform_triggered = true;
@@ -817,6 +820,7 @@ void Avatar::untransform() {
 	// revert some hero stats to last saved
 	stats.speed = hero_stats->speed;
 	stats.flying = hero_stats->flying;
+	stats.intangible = hero_stats->intangible;
 	stats.humanoid = hero_stats->humanoid;
 	stats.animations = hero_stats->animations;
 	stats.effects = hero_stats->effects;
@@ -834,18 +838,9 @@ void Avatar::untransform() {
 	// In order to switch to the stance animation, we can't already be in a stance animation
 	setAnimation("run");
 
-	stats.starting[STAT_DMG_MELEE_MIN] = hero_stats->starting[STAT_DMG_MELEE_MIN];
-	stats.starting[STAT_DMG_MELEE_MAX] = hero_stats->starting[STAT_DMG_MELEE_MAX];
-	stats.starting[STAT_DMG_MENT_MIN] = hero_stats->starting[STAT_DMG_MENT_MIN];
-	stats.starting[STAT_DMG_MENT_MAX] = hero_stats->starting[STAT_DMG_MENT_MAX];
-	stats.starting[STAT_DMG_RANGED_MIN] = hero_stats->starting[STAT_DMG_RANGED_MIN];
-	stats.starting[STAT_DMG_RANGED_MAX] = hero_stats->starting[STAT_DMG_RANGED_MAX];
-
-	stats.starting[STAT_ABS_MIN] = hero_stats->starting[STAT_ABS_MIN];
-	stats.starting[STAT_ABS_MAX] = hero_stats->starting[STAT_ABS_MAX];
-	stats.starting[STAT_AVOIDANCE] = hero_stats->starting[STAT_AVOIDANCE];
-	stats.starting[STAT_ACCURACY] = hero_stats->starting[STAT_ACCURACY];
-	stats.starting[STAT_CRIT] = hero_stats->starting[STAT_CRIT];
+	for (unsigned int i=0; i<STAT_COUNT; ++i) {
+		stats.starting[i] = hero_stats->starting[i];
+	}
 
 	for (unsigned int i=0; i<stats.vulnerable.size(); i++) {
 		stats.vulnerable[i] = hero_stats->vulnerable[i];
@@ -861,6 +856,14 @@ void Avatar::untransform() {
 
 	stats.applyEffects();
 	stats.untransform_on_hit = false;
+}
+
+void Avatar::checkTransform() {
+	// handle transformation
+	if (stats.transform_type != "" && stats.transform_type != "untransform" && stats.transformed == false)
+		transform();
+	if (stats.transform_type != "" && stats.transform_duration == 0)
+		untransform();
 }
 
 void Avatar::setAnimation(std::string name) {
@@ -895,7 +898,7 @@ void Avatar::resetActiveAnimation() {
 			anims[i]->reset();
 }
 
-void Avatar::addRenders(vector<Renderable> &r, vector<Renderable> &r_dead) {
+void Avatar::addRenders(std::vector<Renderable> &r, std::vector<Renderable> &r_dead) {
 	// target
 	if (target_anim && target_visible) {
 		Renderable ren = target_anim->getCurrentFrame(0);

@@ -30,8 +30,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include <limits>
 
-using namespace std;
-
 EnemyManager::EnemyManager()
 	: enemies()
 	, hero_stealth(0)
@@ -46,7 +44,7 @@ void EnemyManager::loadAnimations(Enemy *e) {
 	e->activeAnimation = e->animationSet->getAnimation();
 }
 
-Enemy *EnemyManager::getEnemyPrototype(const string& type_id) {
+Enemy *EnemyManager::getEnemyPrototype(const std::string& type_id) {
 	for (size_t i = 0; i < prototypes.size(); i++)
 		if (prototypes[i].type == type_id) {
 			anim->increaseCount(prototypes[i].stats.animations);
@@ -60,7 +58,7 @@ Enemy *EnemyManager::getEnemyPrototype(const string& type_id) {
 	e.type = type_id;
 
 	if (e.stats.animations == "")
-		logError("EnemyManager: No animation file specified for entity: %s\n", type_id.c_str());
+		logError("EnemyManager: No animation file specified for entity: %s", type_id.c_str());
 
 	loadAnimations(&e);
 	e.loadSounds();
@@ -99,7 +97,7 @@ void EnemyManager::handleNewMap () {
 		mapr->enemies.pop();
 
 		if (me.type.empty()) {
-			logError("EnemyManager: Enemy(%f, %f) doesn't have type attribute set, skipping\n", me.pos.x, me.pos.y);
+			logError("EnemyManager: Enemy(%f, %f) doesn't have type attribute set, skipping", me.pos.x, me.pos.y);
 			continue;
 		}
 
@@ -132,6 +130,7 @@ void EnemyManager::handleNewMap () {
 		mapr->collider.block(me.pos.x, me.pos.y, false);
 	}
 
+	FPoint spawn_pos = mapr->collider.get_random_neighbor(floor(pc->stats.pos), 1, false);
 	while (!allies.empty()) {
 
 		Enemy *e = allies.front();
@@ -140,8 +139,7 @@ void EnemyManager::handleNewMap () {
 		//dont need the result of this. its only called to handle animation and sound
 		getEnemyPrototype(e->type);
 
-		e->stats.pos.x = pc->stats.pos.x;
-		e->stats.pos.y = pc->stats.pos.y;
+		e->stats.pos = spawn_pos;
 		e->stats.direction = pc->stats.direction;
 
 		enemies.push_back(e);
@@ -180,16 +178,16 @@ void EnemyManager::handleSpawn() {
 			espawn.summoner->summons.push_back(&(e->stats));
 		}
 
-		e->type = espawn.type;
 		e->stats.direction = espawn.direction;
 
 		Enemy_Level el = enemyg->getRandomEnemy(espawn.type, 0, 0);
+		e->type = el.type;
 
 		if (el.type != "") {
 			e->stats.load(el.type);
 		}
 		else {
-			logError("EnemyManager: Could not spawn creature type '%s'\n", espawn.type.c_str());
+			logError("EnemyManager: Could not spawn creature type '%s'", espawn.type.c_str());
 			delete e;
 			return;
 		}
@@ -201,10 +199,10 @@ void EnemyManager::handleSpawn() {
 			if (e->animationSet)
 				e->activeAnimation = e->animationSet->getAnimation();
 			else
-				logError("EnemyManager: Animations file could not be loaded for %s\n", espawn.type.c_str());
+				logError("EnemyManager: Animations file could not be loaded for %s", espawn.type.c_str());
 		}
 		else {
-			logError("EnemyManager: No animation file specified for entity: %s\n", espawn.type.c_str());
+			logError("EnemyManager: No animation file specified for entity: %s", espawn.type.c_str());
 		}
 		e->loadSounds();
 
@@ -311,7 +309,7 @@ void EnemyManager::logic() {
 
 	handlePartyBuff();
 
-	vector<Enemy*>::iterator it;
+	std::vector<Enemy*>::iterator it;
 	for (it = enemies.begin(); it != enemies.end(); ++it) {
 		// hazards are processed after Avatar and Enemy[]
 		// so process and clear sound effects from previous frames
@@ -406,7 +404,8 @@ bool EnemyManager::isCleared() {
 	if (enemies.empty()) return true;
 
 	for (unsigned int i=0; i < enemies.size(); i++) {
-		if (enemies[i]->stats.alive) return false;
+		if (enemies[i]->stats.alive && !enemies[i]->stats.hero_ally)
+			return false;
 	}
 
 	return true;
@@ -417,8 +416,8 @@ bool EnemyManager::isCleared() {
  * Map objects need to be drawn in Z order, so we allow a parent object (GameEngine)
  * to collect all mobile sprites each frame.
  */
-void EnemyManager::addRenders(vector<Renderable> &r, vector<Renderable> &r_dead) {
-	vector<Enemy*>::iterator it;
+void EnemyManager::addRenders(std::vector<Renderable> &r, std::vector<Renderable> &r_dead) {
+	std::vector<Enemy*>::iterator it;
 	for (it = enemies.begin(); it != enemies.end(); ++it) {
 		bool dead = (*it)->stats.corpse;
 		if (!dead || (dead && (*it)->stats.corpse_ticks > 0)) {

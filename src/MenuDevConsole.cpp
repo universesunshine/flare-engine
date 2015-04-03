@@ -31,6 +31,16 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 MenuDevConsole::MenuDevConsole() : Menu() {
 
+	button_close = new WidgetButton("images/menus/buttons/button_x.png");
+	tablist.add(button_close);
+
+	input_box = new WidgetInput("images/menus/input_console.png");
+	tablist.add(input_box);
+
+	button_confirm = new WidgetButton();
+	button_confirm->label = msg->get("Execute");
+	tablist.add(button_confirm);
+
 	// Load config settings
 	FileParser infile;
 	// @CLASS MenuDevConsole|Description of menus/devconsole.txt
@@ -40,13 +50,22 @@ MenuDevConsole::MenuDevConsole() : Menu() {
 				continue;
 
 			// @ATTR close|x (integer), y (integer)|Position of the close button.
-			if(infile.key == "close") close_pos = toPoint(infile.val);
+			if(infile.key == "close") {
+				Point pos = toPoint(infile.val);
+				button_close->setBasePos(pos.x, pos.y);
+			}
 			// @ATTR label_title|label|Position of the "Developer Console" label.
 			else if(infile.key == "label_title") title = eatLabelInfo(infile.val);
 			// @ATTR confirm|x (integer), y (integer)|Position of the "Execute" button.
-			else if(infile.key == "confirm") confirm_pos = toPoint(infile.val);
+			else if(infile.key == "confirm") {
+				Point pos = toPoint(infile.val);
+				button_confirm->setBasePos(pos.x, pos.y);
+			}
 			// @ATTR input|x (integer), y (integer)|Position of the command entry widget.
-			else if(infile.key == "input") input_pos = toPoint(infile.val);
+			else if(infile.key == "input") {
+				Point pos = toPoint(infile.val);
+				input_box->setBasePos(pos.x, pos.y);
+			}
 			// @ATTR history|x (integer), y (integer), w (integer), h (integer)|Position and dimensions of the command history.
 			else if(infile.key == "history") history_area = toRect(infile.val);
 
@@ -55,26 +74,17 @@ MenuDevConsole::MenuDevConsole() : Menu() {
 		infile.close();
 	}
 
-	button_close = new WidgetButton("images/menus/buttons/button_x.png");
-	tablist.add(button_close);
-
-	input_box = new WidgetInput("images/menus/input_console.png");
-	tablist.add(input_box);
-
-	button_confirm = new WidgetButton("images/menus/buttons/button_default.png");
-	button_confirm->label = msg->get("Execute");
-	tablist.add(button_confirm);
-
 	log_history = new WidgetLog(history_area.w, history_area.h);
+	log_history->setBasePos(history_area.x, history_area.y);
 	tablist.add(log_history->getWidget());
 
 	setBackground("images/menus/dev_console.png");
 
-	align();
-	alignElements();
-
 	color_echo = font->getColor("widget_disabled");
 	color_error = font->getColor("menu_penalty");
+
+	align();
+	input_box->inFocus = true;
 }
 
 MenuDevConsole::~MenuDevConsole() {
@@ -84,18 +94,13 @@ MenuDevConsole::~MenuDevConsole() {
 	delete log_history;
 }
 
-void MenuDevConsole::alignElements() {
-	button_close->pos.x = window_area.x + close_pos.x;
-	button_close->pos.y = window_area.y + close_pos.y;
+void MenuDevConsole::align() {
+	Menu::align();
 
-	button_confirm->pos.x = window_area.x + confirm_pos.x;
-	button_confirm->pos.y = window_area.y + confirm_pos.y;
-	button_confirm->refresh();
-
-	input_box->setPosition(window_area.x + input_pos.x, window_area.y + input_pos.y);
-	input_box->inFocus = true;
-
-	log_history->setPosition(window_area.x + history_area.x, window_area.y + history_area.y);
+	button_close->setPos(window_area.x, window_area.y);
+	button_confirm->setPos(window_area.x, window_area.y);
+	input_box->setPos(window_area.x, window_area.y);
+	log_history->setPos(window_area.x, window_area.y);
 
 	label.set(window_area.x+title.x, window_area.y+title.y, title.justify, title.valign, msg->get("Developer Console"), font->getColor("menu_normal"));
 }
@@ -193,9 +198,7 @@ void MenuDevConsole::execute() {
 	}
 	else if (args[0] == "spawn_enemy") {
 		if (args.size() > 1) {
-			int min_level = (args.size() > 2 && toInt(args[2]) > 0) ? toInt(args[2]) : 0;
-			int max_level = (args.size() > 3 && toInt(args[3]) > 0) ? toInt(args[3]) : std::numeric_limits<int>::max();
-			Enemy_Level el = enemyg->getRandomEnemy(args[1], min_level, max_level);
+			Enemy_Level el = enemyg->getRandomEnemy(args[1], 0, 0);
 			if (el.type != "") {
 				Point spawn_pos = floor(mapr->collider.get_random_neighbor(floor(pc->stats.pos), 1));
 				powers->spawn(args[1], spawn_pos);

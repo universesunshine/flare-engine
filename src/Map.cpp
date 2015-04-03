@@ -25,22 +25,21 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "Settings.h"
 
 Map::Map()
-	: events()
-	, enemy_groups()
-	, filename("")
+	: filename("")
+	, collision_layer(-1)
 	, layers()
-	, w(0)
-	, h(0)
+	, events()
+	, w(1)
+	, h(1)
 	, spawn()
 	, spawn_dir(0) {
 }
 
-
+Map::~Map() {
+	clearLayers();
+}
 
 void Map::clearLayers() {
-
-	for (unsigned i = 0; i < layers.size(); ++i)
-		delete[] layers[i];
 	layers.clear();
 	layernames.clear();
 }
@@ -55,9 +54,13 @@ void Map::clearEvents() {
 	statblocks.clear();
 }
 
+void Map::removeLayer(unsigned index) {
+	layernames.erase(layernames.begin() + index);
+	layers.erase(layers.begin() + index);
+}
+
 int Map::load(std::string fname) {
 	FileParser infile;
-	maprow *cur_layer = NULL;
 
 	clearEvents();
 	clearLayers();
@@ -84,7 +87,7 @@ int Map::load(std::string fname) {
 		if (infile.section == "header")
 			loadHeader(infile);
 		else if (infile.section == "layer")
-			loadLayer(infile, &cur_layer);
+			loadLayer(infile);
 		else if (infile.section == "enemy")
 			loadEnemyGroup(infile, &enemy_groups.back());
 		else if (infile.section == "npc")
@@ -103,7 +106,7 @@ int Map::load(std::string fname) {
 			StatBlock *statb = &statblocks.back();
 
 			if (!statb) {
-				logError("Map: Could not create StatBlock for Event.\n");
+				logError("Map: Could not create StatBlock for Event.");
 				continue;
 			}
 
@@ -132,6 +135,17 @@ int Map::load(std::string fname) {
 		}
 	}
 
+	// ensure that our map contains a collison layer
+	if (std::find(layernames.begin(), layernames.end(), "collision") == layernames.end()) {
+		layernames.push_back("collision");
+		layers.resize(layers.size()+1);
+		layers.back().resize(w);
+		for (unsigned i=0; i<w; ++i) {
+			layers.back()[i].resize(h, 0);
+		}
+		collision_layer = layers.size()-1;
+	}
+
 	return 0;
 }
 
@@ -142,18 +156,18 @@ void Map::loadHeader(FileParser &infile) {
 	}
 	else if (infile.key == "width") {
 		// @ATTR width|integer|Width of map
-		this->w = toInt(infile.val);
+		this->w = std::max(toInt(infile.val), 1);
 	}
 	else if (infile.key == "height") {
 		// @ATTR height|integer|Height of map
-		this->h = toInt(infile.val);
+		this->h = std::max(toInt(infile.val), 1);
 	}
 	else if (infile.key == "tileset") {
-		// @ATTR tileset|string|Tileset to use for map
+		// @ATTR tileset|string|Filename of a tileset definition to use for map
 		this->tileset = infile.val;
 	}
 	else if (infile.key == "music") {
-		// @ATTR music|string|Background music to use for map
+		// @ATTR music|string|Filename of background music to use for map
 		music_filename = infile.val;
 	}
 	else if (infile.key == "location") {
@@ -176,12 +190,17 @@ void Map::loadHeader(FileParser &infile) {
 	}
 }
 
-void Map::loadLayer(FileParser &infile, maprow **current_layer) {
+void Map::loadLayer(FileParser &infile) {
 	if (infile.key == "type") {
 		// @ATTR layer.type|string|Map layer type.
-		*current_layer = new maprow[w];
-		layers.push_back(*current_layer);
+		layers.resize(layers.size()+1);
+		layers.back().resize(w);
+		for (unsigned i=0; i<w; ++i) {
+			layers.back()[i].resize(h);
+		}
 		layernames.push_back(infile.val);
+		if (infile.val == "collision")
+			collision_layer = layernames.size()-1;
 	}
 	else if (infile.key == "format") {
 		// @ATTR layer.format|string|Format for map layer, must be 'dec'
@@ -214,7 +233,7 @@ void Map::loadLayer(FileParser &infile, maprow **current_layer) {
 			}
 
 			for (int i=0; i<w; i++)
-				(*current_layer)[i][j] = popFirstInt(val, ',');
+				layers.back()[i][j] = popFirstInt(val, ',');
 		}
 	}
 	else {
@@ -250,11 +269,11 @@ void Map::loadEnemyGroup(FileParser &infile, Map_Group *group) {
 		group->chance = std::min(1.0f, std::max(0.0f, n));
 	}
 	else if (infile.key == "direction") {
-		// @ATTR enemygroup.direction|integer|Direction of enemies
-		group->direction = std::min(std::max(0, toInt(infile.val)), 7);
+		// @ATTR enemygroup.direction|direction|Direction that enemies will initially face.
+		group->direction = parse_direction(infile.val);
 	}
 	else if (infile.key == "waypoints") {
-		// @ATTR enemygroup.waypoint|[x(integer), y(integer)]|Enemy waypoint; single enemy only; negates wander_radius
+		// @ATTR enemygroup.waypoints|[x(integer), y(integer)]|Enemy waypoints; single enemy only; negates wander_radius
 		std::string none = "";
 		std::string a = infile.nextValue();
 		std::string b = infile.nextValue();
@@ -305,7 +324,7 @@ void Map::loadNPC(FileParser &infile) {
 			npcs.back().requires_status.push_back(s);
 	}
 	else if (infile.key == "requires_not_status") {
-		// @ATTR npc.requires_not|string|Status required to be missing for NPC load. There can be multiple states, separated by comma
+		// @ATTR npc.requires_not_status|string|Status required to be missing for NPC load. There can be multiple states, separated by comma
 		while ( (s = infile.nextValue()) != "")
 			npcs.back().requires_not_status.push_back(s);
 	}
@@ -313,6 +332,20 @@ void Map::loadNPC(FileParser &infile) {
 		// @ATTR npc.location|[x(integer), y(integer)]|Location of NPC
 		npcs.back().pos.x = toInt(infile.nextValue()) + 0.5f;
 		npcs.back().pos.y = toInt(infile.nextValue()) + 0.5f;
+
+		// make sure this NPC has a collision tile
+		// otherwise, it becomes possible for the player to stand "inside" the npc, which will trigger their event infinitely
+		if (collision_layer != -1) {
+			unsigned tile_x = npcs.back().pos.x;
+			unsigned tile_y = npcs.back().pos.y;
+			if (tile_x < (unsigned)w && tile_y < (unsigned)h) {
+				short unsigned int& tile = layers[collision_layer][tile_x][tile_y];
+				if (tile == BLOCKS_NONE) {
+					logError("Map: NPC at (%d, %d) does not have a collision tile. Creating one now.", tile_x, tile_y);
+					tile = BLOCKS_MOVEMENT_HIDDEN;
+				}
+			}
+		}
 	}
 	else {
 		infile.error("Map: '%s' is not a valid key.", infile.key.c_str());

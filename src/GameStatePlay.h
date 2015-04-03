@@ -88,7 +88,7 @@ private:
 	void checkStash();
 	void checkCutscene();
 	void checkSaveEvent();
-	void updateActionBar(int index = 0);
+	void updateActionBar(unsigned index = 0);
 	void showLoading();
 	void loadTitles();
 
@@ -107,9 +107,11 @@ private:
 public:
 	GameStatePlay();
 	~GameStatePlay();
+	void refreshWidgets();
 
 	void initialize();
 
+	bool isPaused();
 	void logic();
 	void render();
 	void showFPS(int fps);

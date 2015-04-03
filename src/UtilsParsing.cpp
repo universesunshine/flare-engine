@@ -24,17 +24,15 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include <typeinfo>
 #include <math.h>
 
-using namespace std;
-
-string trim(string s, const string& delimiters) {
+std::string trim(std::string s, const std::string& delimiters) {
 	return trim_left_inplace(trim_right_inplace(s, delimiters), delimiters);
 }
 
-string trim_left_inplace(string s, const string& delimiters) {
+std::string trim_left_inplace(std::string s, const std::string& delimiters) {
 	return s.erase(0, s.find_first_not_of(delimiters));
 }
 
-string trim_right_inplace(string s, const string& delimiters) {
+std::string trim_right_inplace(std::string s, const std::string& delimiters) {
 	return s.erase(s.find_last_not_of(delimiters) + 1);
 }
 
@@ -55,7 +53,7 @@ int parse_duration(const std::string& s) {
 		val *= MAX_FRAMES_PER_SEC;
 	else {
 		if (suffix != "ms")
-			logError("UtilsParsing: Duration of '%d' does not have a suffix. Assuming 'ms'.\n", val);
+			logError("UtilsParsing: Duration of '%d' does not have a suffix. Assuming 'ms'.", val);
 		val = int(floor(((val*MAX_FRAMES_PER_SEC) / 1000.f) + 0.5f));
 	}
 
@@ -65,15 +63,70 @@ int parse_duration(const std::string& s) {
 	return val;
 }
 
-string parse_section_title(const string& s) {
+int parse_direction(const std::string& s) {
+	int dir;
+
+	if (s == "N")
+		dir = 3;
+	else if (s == "NE")
+		dir = 4;
+	else if (s == "E")
+		dir = 5;
+	else if (s == "SE")
+		dir = 6;
+	else if (s == "S")
+		dir = 7;
+	else if (s == "SW")
+		dir = 0;
+	else if (s == "W")
+		dir = 1;
+	else if (s == "NW")
+		dir = 2;
+	else {
+		dir = toInt(s);
+		if (dir < 0 || dir > 7) {
+			logError("UtilsParsing: Direction '%d' is not within range 0-7.");
+			dir = 0;
+		}
+	}
+
+	return dir;
+}
+
+ALIGNMENT parse_alignment(const std::string &s) {
+	ALIGNMENT align = ALIGN_TOPLEFT;
+
+	if (s == "topleft")
+		align = ALIGN_TOPLEFT;
+	else if (s == "top")
+		align = ALIGN_TOP;
+	else if (s == "topright")
+		align = ALIGN_TOPRIGHT;
+	else if (s == "left")
+		align = ALIGN_LEFT;
+	else if (s == "center")
+		align = ALIGN_CENTER;
+	else if (s == "right")
+		align = ALIGN_RIGHT;
+	else if (s == "bottomleft")
+		align = ALIGN_BOTTOMLEFT;
+	else if (s == "bottom")
+		align = ALIGN_BOTTOM;
+	else if (s == "bottomright")
+		align = ALIGN_BOTTOMRIGHT;
+
+	return align;
+}
+
+std::string parse_section_title(const std::string& s) {
 	size_t bracket = s.find_first_of(']');
-	if (bracket == string::npos) return ""; // not found
+	if (bracket == std::string::npos) return ""; // not found
 	return s.substr(1, bracket-1);
 }
 
-void parse_key_pair(const string& s, string &key, string &val) {
+void parse_key_pair(const std::string& s, std::string &key, std::string &val) {
 	size_t separator = s.find_first_of('=');
-	if (separator == string::npos) {
+	if (separator == std::string::npos) {
 		key = "";
 		val = "";
 		return; // not found
@@ -90,10 +143,10 @@ void parse_key_pair(const string& s, string &key, string &val) {
  *
  * This is basically a really lazy "split" replacement
  */
-int popFirstInt(string &s, char separator) {
+int popFirstInt(std::string &s, char separator) {
 	int num = 0;
 	size_t seppos = s.find_first_of(separator);
-	if (seppos == string::npos) {
+	if (seppos == std::string::npos) {
 		num = toInt(s);
 		s = "";
 	}
@@ -104,10 +157,10 @@ int popFirstInt(string &s, char separator) {
 	return num;
 }
 
-string popFirstString(string &s, char separator) {
-	string outs = "";
+std::string popFirstString(std::string &s, char separator) {
+	std::string outs = "";
 	size_t seppos = s.find_first_of(separator);
-	if (seppos == string::npos) {
+	if (seppos == std::string::npos) {
 		outs = s;
 		s = "";
 	}
@@ -119,19 +172,19 @@ string popFirstString(string &s, char separator) {
 }
 
 // similar to popFirstString but does not alter the input string
-string getNextToken(const string& s, size_t &cursor, char separator) {
+std::string getNextToken(const std::string& s, size_t &cursor, char separator) {
 	size_t seppos = s.find_first_of(separator, cursor);
-	if (seppos == string::npos) { // not found
-		cursor = string::npos;
+	if (seppos == std::string::npos) { // not found
+		cursor = std::string::npos;
 		return "";
 	}
-	string outs = s.substr(cursor, seppos-cursor);
+	std::string outs = s.substr(cursor, seppos-cursor);
 	cursor = seppos+1;
 	return outs;
 }
 
 // strip carriage return if exists
-string stripCarriageReturn(const string& line) {
+std::string stripCarriageReturn(const std::string& line) {
 	if (line.length() > 0) {
 		if ('\r' == line.at(line.length()-1)) {
 			return line.substr(0, line.length()-1);
@@ -140,8 +193,8 @@ string stripCarriageReturn(const string& line) {
 	return line;
 }
 
-string getLine(ifstream &infile) {
-	string line;
+std::string getLine(std::ifstream &infile) {
+	std::string line;
 	// This is the standard way to check whether a read failed.
 	if (!getline(infile, line))
 		return "";
@@ -149,13 +202,13 @@ string getLine(ifstream &infile) {
 	return line;
 }
 
-bool tryParseValue(const type_info & type, const char * value, void * output) {
-	return tryParseValue(type, string(value), output);
+bool tryParseValue(const std::type_info & type, const char * value, void * output) {
+	return tryParseValue(type, std::string(value), output);
 }
 
-bool tryParseValue(const type_info & type, const std::string & value, void * output) {
+bool tryParseValue(const std::type_info & type, const std::string & value, void * output) {
 
-	stringstream stream(value);
+	std::stringstream stream(value);
 
 	if (type == typeid(bool)) {
 		stream>>(bool&)*((bool*)output);
@@ -182,19 +235,19 @@ bool tryParseValue(const type_info & type, const std::string & value, void * out
 		stream>>(float&)*((float*)output);
 	}
 	else if (type == typeid(std::string)) {
-		*((string *)output) = value;
+		*((std::string *)output) = value;
 	}
 	else {
-		logError("UtilsParsing: %s: a required type is not defined!\n", __FUNCTION__);
+		logError("UtilsParsing: %s: a required type is not defined!", __FUNCTION__);
 		return false;
 	}
 
 	return !stream.fail();
 }
 
-std::string toString(const type_info & type, void * value) {
+std::string toString(const std::type_info & type, void * value) {
 
-	stringstream stream;
+	std::stringstream stream;
 
 	if (type == typeid(bool)) {
 		stream<<*((bool*)value);
@@ -221,33 +274,33 @@ std::string toString(const type_info & type, void * value) {
 		stream<<*((float*)value);
 	}
 	else if (type == typeid(std::string)) {
-		return (string &)*((string *)value);
+		return (std::string &)*((std::string *)value);
 	}
 	else {
-		logError("UtilsParsing: %s: a required type is not defined!\n", __FUNCTION__);
+		logError("UtilsParsing: %s: a required type is not defined!", __FUNCTION__);
 		return "";
 	}
 
 	return stream.str();
 }
 
-int toInt(const string& s, int default_value) {
+int toInt(const std::string& s, int default_value) {
 	int result;
-	if (!(stringstream(s) >> result))
+	if (!(std::stringstream(s) >> result))
 		result = default_value;
 	return result;
 }
 
-float toFloat(const string& s, float default_value) {
+float toFloat(const std::string& s, float default_value) {
 	float result;
-	if (!(stringstream(s) >> result))
+	if (!(std::stringstream(s) >> result))
 		result = default_value;
 	return result;
 }
 
-unsigned long toUnsignedLong(const string& s, unsigned long  default_value) {
+unsigned long toUnsignedLong(const std::string& s, unsigned long  default_value) {
 	unsigned long result;
-	if (!(stringstream(s) >> result))
+	if (!(std::stringstream(s) >> result))
 		result = default_value;
 	return result;
 }
@@ -263,7 +316,7 @@ bool toBool(std::string value) {
 	if (value == "no") return false;
 	if (value == "0") return false;
 
-	logError("UtilsParsing: %s %s doesn't know how to handle %s\n", __FILE__, __FUNCTION__, value.c_str());
+	logError("UtilsParsing: %s %s doesn't know how to handle %s", __FILE__, __FUNCTION__, value.c_str());
 	return false;
 }
 

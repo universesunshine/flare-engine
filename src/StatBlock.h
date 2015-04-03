@@ -88,12 +88,14 @@ public:
 	void applyEffects();
 	void calcBase();
 	void logic();
+	void removeSummons();
 	void removeFromSummons();
 	bool summonLimitReached(int power_id) const;
 	void setWanderArea(int r);
 	void loadHeroSFX();
 	std::string getShortClass();
 	std::string getLongClass();
+	void addXP(int amount);
 
 	bool alive;
 	bool corpse; // creature is dead and done animating

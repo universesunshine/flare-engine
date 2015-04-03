@@ -42,7 +42,7 @@ MenuExit::MenuExit() : Menu() {
 
 	exitClicked = false;
 
-	buttonExit = new WidgetButton("images/menus/buttons/button_default.png");
+	buttonExit = new WidgetButton();
 
 	if (SAVE_ONEXIT)
 		buttonExit->label = msg->get("Save & Exit");
@@ -57,10 +57,11 @@ MenuExit::MenuExit() : Menu() {
 	tablist.add(buttonClose);
 
 	align();
-	alignElements();
 }
 
-void MenuExit::alignElements() {
+void MenuExit::align() {
+	Menu::align();
+
 	buttonExit->pos.x = window_area.x + window_area.w/2 - buttonExit->pos.w/2;
 	buttonExit->pos.y = window_area.y + window_area.h/2;
 	buttonExit->refresh();

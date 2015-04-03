@@ -21,6 +21,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "CampaignManager.h"
 #include "CommonIncludes.h"
 #include "EnemyGroupManager.h"
+#include "FileParser.h"
 #include "MapRenderer.h"
 #include "PowerManager.h"
 #include "SharedGameResources.h"
@@ -35,8 +36,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include <limits>
 #include <math.h>
 
-using namespace std;
-
 MapRenderer::MapRenderer()
 	: Map()
 	, music(NULL)
@@ -44,6 +43,7 @@ MapRenderer::MapRenderer()
 	, tip_pos()
 	, show_tooltip(false)
 	, shakycam()
+	, npc_tooltip_margin(0)
 	, cam()
 	, map_change(false)
 	, teleportation(false)
@@ -57,7 +57,21 @@ MapRenderer::MapRenderer()
 	, stash_pos()
 	, enemies_cleared(false)
 	, save_game(false)
-	, index_objectlayer(0) {
+	, npc_id(-1)
+	, index_objectlayer(0)
+{
+	FileParser infile;
+	// load tooltip_margin from engine config file
+	// @CLASS Map|Description of engine/tooltips.txt
+	if (infile.open("engine/tooltips.txt")) {
+		while (infile.next()) {
+			if (infile.key == "npc_tooltip_margin") {
+				// @ATTR npc_tooltip_margin|integer|Vertical offset for NPC labels.
+				npc_tooltip_margin = toInt(infile.val);
+			}
+		}
+		infile.close();
+	}
 }
 
 void MapRenderer::clearQueues() {
@@ -71,7 +85,7 @@ bool MapRenderer::enemyGroupPlaceEnemy(float x, float y, Map_Group &g) {
 		if (!enemy_lev.type.empty()) {
 			Map_Enemy group_member = Map_Enemy(enemy_lev.type, FPoint(x, y));
 
-			group_member.direction = g.direction;
+			group_member.direction = (g.direction == -1 ? rand()%8 : g.direction);
 			group_member.wander_radius = g.wander_radius;
 			group_member.requires_status = g.requires_status;
 			group_member.requires_not_status = g.requires_not_status;
@@ -132,7 +146,7 @@ void MapRenderer::pushEnemyGroup(Map_Group &g) {
 
 	}
 	if (enemies_to_spawn) {
-		logError("MapRenderer: Could not spawn all enemies in group at %s (x=%d,y=%d,w=%d,h=%d), %d missing (min=%d max=%d)\n",
+		logError("MapRenderer: Could not spawn all enemies in group at %s (x=%d,y=%d,w=%d,h=%d), %d missing (min=%d max=%d)",
 				filename.c_str(), g.pos.x, g.pos.y, g.area.x, g.area.y, enemies_to_spawn, g.numbermin, g.numbermax);
 	}
 }
@@ -163,9 +177,7 @@ int MapRenderer::load(std::string fname) {
 	for (unsigned i = 0; i < layers.size(); ++i) {
 		if (layernames[i] == "collision") {
 			collider.setmap(layers[i], w, h);
-			layernames.erase(layernames.begin() + i);
-			delete[] layers[i];
-			layers.erase(layers.begin() + i);
+			removeLayer(i);
 		}
 	}
 	for (unsigned i = 0; i < layers.size(); ++i)
@@ -185,7 +197,7 @@ int MapRenderer::load(std::string fname) {
 			for (int y = 0; y < h; ++y) {
 				const unsigned tile_id = layers[i][x][y];
 				if (tile_id > 0 && (tile_id >= tset.tiles.size() || tset.tiles[tile_id].tile == NULL)) {
-					if (find(corrupted.begin(), corrupted.end(), tile_id) == corrupted.end()) {
+					if (std::find(corrupted.begin(), corrupted.end(), tile_id) == corrupted.end()) {
 						corrupted.push_back(tile_id);
 					}
 					layers[i][x][y] = 0;
@@ -195,9 +207,9 @@ int MapRenderer::load(std::string fname) {
 	}
 
 	if (!corrupted.empty()) {
-		logError("MapRenderer: Tileset or Map corrupted. A tile has a larger id than the tileset allows or is undefined.\n");
+		logError("MapRenderer: Tileset or Map corrupted. A tile has a larger id than the tileset allows or is undefined.");
 		while (!corrupted.empty()) {
-			logError("MapRenderer: Removing offending tile id %d.\n", corrupted.back());
+			logError("MapRenderer: Removing offending tile id %d.", corrupted.back());
 			corrupted.pop_back();
 		}
 	}
@@ -225,7 +237,7 @@ void MapRenderer::loadMusic() {
 	if (AUDIO && MUSIC_VOLUME) {
 		music = Mix_LoadMUS(mods->locate(played_music_filename).c_str());
 		if(!music)
-			logError("MapRenderer: Mix_LoadMUS: %s\n", Mix_GetError());
+			logError("MapRenderer: Mix_LoadMUS: %s", Mix_GetError());
 	}
 
 	if (music) {
@@ -242,8 +254,13 @@ void MapRenderer::logic() {
 	// handle tile set logic e.g. animations
 	tset.logic();
 
+	// handle statblock logic for map powers
+	for (unsigned i=0; i<statblocks.size(); ++i) {
+		statblocks[i].logic();
+	}
+
 	// handle event cooldowns
-	vector<Event>::iterator it;
+	std::vector<Event>::iterator it;
 	for (it = events.begin(); it < events.end(); ++it) {
 		if ((*it).cooldown_ticks > 0) (*it).cooldown_ticks--;
 	}
@@ -258,8 +275,8 @@ bool priocompare(const Renderable &r1, const Renderable &r2) {
  * Sort in the same order as the tiles are drawn
  * Depends upon the map implementation
  */
-void calculatePriosIso(vector<Renderable> &r) {
-	for (vector<Renderable>::iterator it = r.begin(); it != r.end(); ++it) {
+void calculatePriosIso(std::vector<Renderable> &r) {
+	for (std::vector<Renderable>::iterator it = r.begin(); it != r.end(); ++it) {
 		const unsigned tilex = (const unsigned)floor(it->map_pos.x);
 		const unsigned tiley = (const unsigned)floor(it->map_pos.y);
 		const int commax = (const int)((float)(it->map_pos.x - tilex) * (2<<16));
@@ -268,8 +285,8 @@ void calculatePriosIso(vector<Renderable> &r) {
 	}
 }
 
-void calculatePriosOrtho(vector<Renderable> &r) {
-	for (vector<Renderable>::iterator it = r.begin(); it != r.end(); ++it) {
+void calculatePriosOrtho(std::vector<Renderable> &r) {
+	for (std::vector<Renderable>::iterator it = r.begin(); it != r.end(); ++it) {
 		const unsigned tilex = (const unsigned)floor(it->map_pos.x);
 		const unsigned tiley = (const unsigned)floor(it->map_pos.y);
 		const int commay = (const int)(1024 * it->map_pos.y);
@@ -277,7 +294,7 @@ void calculatePriosOrtho(vector<Renderable> &r) {
 	}
 }
 
-void MapRenderer::render(vector<Renderable> &r, vector<Renderable> &r_dead) {
+void MapRenderer::render(std::vector<Renderable> &r, std::vector<Renderable> &r_dead) {
 
 	if (shaky_cam_ticks == 0) {
 		shakycam.x = cam.x;
@@ -304,7 +321,7 @@ void MapRenderer::render(vector<Renderable> &r, vector<Renderable> &r_dead) {
 	}
 }
 
-void MapRenderer::drawRenderable(vector<Renderable>::iterator r_cursor) {
+void MapRenderer::drawRenderable(std::vector<Renderable>::iterator r_cursor) {
 	if (r_cursor->image != NULL) {
 		Rect dest;
 		Point p = map_to_screen(r_cursor->map_pos.x, r_cursor->map_pos.y, shakycam.x, shakycam.y);
@@ -314,7 +331,7 @@ void MapRenderer::drawRenderable(vector<Renderable>::iterator r_cursor) {
 	}
 }
 
-void MapRenderer::renderIsoLayer(const unsigned short layerdata[256][256]) {
+void MapRenderer::renderIsoLayer(const Map_Layer& layerdata) {
 	int_fast16_t i; // first index of the map array
 	int_fast16_t j; // second index of the map array
 	Rect dest;
@@ -376,21 +393,21 @@ void MapRenderer::renderIsoLayer(const unsigned short layerdata[256][256]) {
 	}
 }
 
-void MapRenderer::renderIsoBackObjects(vector<Renderable> &r) {
-	vector<Renderable>::iterator it;
+void MapRenderer::renderIsoBackObjects(std::vector<Renderable> &r) {
+	std::vector<Renderable>::iterator it;
 	for (it = r.begin(); it != r.end(); ++it)
 		drawRenderable(it);
 }
 
-void MapRenderer::renderIsoFrontObjects(vector<Renderable> &r) {
+void MapRenderer::renderIsoFrontObjects(std::vector<Renderable> &r) {
 	Rect dest;
 
 	const Point upperleft = floor(screen_to_map(0, 0, shakycam.x, shakycam.y));
 	const int_fast16_t max_tiles_width =   (VIEW_W / TILE_W) + 2 * tset.max_size_x;
 	const int_fast16_t max_tiles_height = ((VIEW_H / TILE_H) + 2 * tset.max_size_y)*2;
 
-	vector<Renderable>::iterator r_cursor = r.begin();
-	vector<Renderable>::iterator r_end = r.end();
+	std::vector<Renderable>::iterator r_cursor = r.begin();
+	std::vector<Renderable>::iterator r_end = r.end();
 
 	// object layer
 	int_fast16_t j = upperleft.y - tset.max_size_y + tset.max_size_x;
@@ -402,7 +419,6 @@ void MapRenderer::renderIsoFrontObjects(vector<Renderable> &r) {
 	if (index_objectlayer >= layers.size())
 		return;
 
-	maprow *objectlayer = layers[index_objectlayer];
 	for (uint_fast16_t y = max_tiles_height ; y; --y) {
 		int_fast16_t tiles_width = 0;
 
@@ -429,7 +445,7 @@ void MapRenderer::renderIsoFrontObjects(vector<Renderable> &r) {
 			++tiles_width;
 			p.x += TILE_W;
 
-			if (const uint_fast16_t current_tile = objectlayer[i][j]) {
+			if (const uint_fast16_t current_tile = layers[index_objectlayer][i][j]) {
 				dest.x = p.x - tset.tiles[current_tile].offset.x;
 				dest.y = p.y - tset.tiles[current_tile].offset.y;
 				tset.tiles[current_tile].tile->setDest(dest);
@@ -454,7 +470,7 @@ void MapRenderer::renderIsoFrontObjects(vector<Renderable> &r) {
 	}
 }
 
-void MapRenderer::renderIso(vector<Renderable> &r, vector<Renderable> &r_dead) {
+void MapRenderer::renderIso(std::vector<Renderable> &r, std::vector<Renderable> &r_dead) {
 	size_t index = 0;
 	while (index < index_objectlayer)
 		renderIsoLayer(layers[index++]);
@@ -469,14 +485,14 @@ void MapRenderer::renderIso(vector<Renderable> &r, vector<Renderable> &r_dead) {
 	checkTooltip();
 }
 
-void MapRenderer::renderOrthoLayer(const unsigned short layerdata[256][256]) {
+void MapRenderer::renderOrthoLayer(const Map_Layer& layerdata) {
 
 	const Point upperleft = floor(screen_to_map(0, 0, shakycam.x, shakycam.y));
 
-	short int startj = max(0, upperleft.y);
-	short int starti = max(0, upperleft.x);
-	const short max_tiles_width =  min(w, static_cast<short int>(starti + (VIEW_W / TILE_W) + 2 * tset.max_size_x));
-	const short max_tiles_height = min(h, static_cast<short int>(startj + (VIEW_H / TILE_H) + 2 * tset.max_size_y));
+	short int startj = std::max(0, upperleft.y);
+	short int starti = std::max(0, upperleft.x);
+	const short max_tiles_width =  std::min(w, static_cast<short unsigned int>(starti + (VIEW_W / TILE_W) + 2 * tset.max_size_x));
+	const short max_tiles_height = std::min(h, static_cast<short unsigned int>(startj + (VIEW_H / TILE_H) + 2 * tset.max_size_y));
 
 	short int i;
 	short int j;
@@ -500,7 +516,7 @@ void MapRenderer::renderOrthoLayer(const unsigned short layerdata[256][256]) {
 
 void MapRenderer::renderOrthoBackObjects(std::vector<Renderable> &r) {
 	// some renderables are drawn above the background and below the objects
-	vector<Renderable>::iterator it;
+	std::vector<Renderable>::iterator it;
 	for (it = r.begin(); it != r.end(); ++it)
 		drawRenderable(it);
 }
@@ -510,15 +526,15 @@ void MapRenderer::renderOrthoFrontObjects(std::vector<Renderable> &r) {
 	short int i;
 	short int j;
 	Rect dest;
-	vector<Renderable>::iterator r_cursor = r.begin();
-	vector<Renderable>::iterator r_end = r.end();
+	std::vector<Renderable>::iterator r_cursor = r.begin();
+	std::vector<Renderable>::iterator r_end = r.end();
 
 	const Point upperleft = floor(screen_to_map(0, 0, shakycam.x, shakycam.y));
 
-	short int startj = max(0, upperleft.y);
-	short int starti = max(0, upperleft.x);
-	const short max_tiles_width  = min(w, static_cast<short int>(starti + (VIEW_W / TILE_W) + 2 * tset.max_size_x));
-	const short max_tiles_height = min(h, static_cast<short int>(startj + (VIEW_H / TILE_H) + 2 * tset.max_size_y));
+	short int startj = std::max(0, upperleft.y);
+	short int starti = std::max(0, upperleft.x);
+	const short max_tiles_width  = std::min(w, static_cast<short unsigned int>(starti + (VIEW_W / TILE_W) + 2 * tset.max_size_x));
+	const short max_tiles_height = std::min(h, static_cast<short unsigned int>(startj + (VIEW_H / TILE_H) + 2 * tset.max_size_y));
 
 	while (r_cursor != r_end && (int)(r_cursor->map_pos.y) < startj)
 		++r_cursor;
@@ -526,13 +542,12 @@ void MapRenderer::renderOrthoFrontObjects(std::vector<Renderable> &r) {
 	if (index_objectlayer >= layers.size())
 		return;
 
-	maprow *objectlayer = layers[index_objectlayer];
 	for (j = startj; j < max_tiles_height; j++) {
 		Point p = map_to_screen(starti, j, shakycam.x, shakycam.y);
 		p = center_tile(p);
 		for (i = starti; i<max_tiles_width; i++) {
 
-			if (const unsigned short current_tile = objectlayer[i][j]) {
+			if (const unsigned short current_tile = layers[index_objectlayer][i][j]) {
 				dest.x = p.x - tset.tiles[current_tile].offset.x;
 				dest.y = p.y - tset.tiles[current_tile].offset.y;
 				tset.tiles[current_tile].tile->setDest(dest);
@@ -552,7 +567,7 @@ void MapRenderer::renderOrthoFrontObjects(std::vector<Renderable> &r) {
 	}
 }
 
-void MapRenderer::renderOrtho(vector<Renderable> &r, vector<Renderable> &r_dead) {
+void MapRenderer::renderOrtho(std::vector<Renderable> &r, std::vector<Renderable> &r_dead) {
 	unsigned index = 0;
 	while (index < index_objectlayer)
 		renderOrthoLayer(layers[index++]);
@@ -568,7 +583,7 @@ void MapRenderer::renderOrtho(vector<Renderable> &r, vector<Renderable> &r_dead)
 }
 
 void MapRenderer::executeOnLoadEvents() {
-	vector<Event>::iterator it;
+	std::vector<Event>::iterator it;
 
 	// loop in reverse because we may erase elements
 	for (it = events.end(); it != events.begin(); ) {
@@ -585,7 +600,7 @@ void MapRenderer::executeOnLoadEvents() {
 }
 
 void MapRenderer::executeOnMapExitEvents() {
-	vector<Event>::iterator it;
+	std::vector<Event>::iterator it;
 
 	// We're leaving the map, so the events of this map are removed anyway in
 	// the next frame (Reminder: We're about to load a new map ;),
@@ -605,7 +620,7 @@ void MapRenderer::checkEvents(FPoint loc) {
 	Point maploc;
 	maploc.x = int(loc.x);
 	maploc.y = int(loc.y);
-	vector<Event>::iterator it;
+	std::vector<Event>::iterator it;
 
 	// loop in reverse because we may erase elements
 	for (it = events.end(); it != events.begin(); ) {
@@ -629,7 +644,7 @@ void MapRenderer::checkEvents(FPoint loc) {
 			if (inside) {
 				if (!(*it).getComponent("wasInsideEventArea")) {
 					(*it).components.push_back(Event_Component());
-					(*it).components.back().type = string("wasInsideEventArea");
+					(*it).components.back().type = std::string("wasInsideEventArea");
 				}
 			}
 			else {
@@ -662,7 +677,7 @@ void MapRenderer::checkHotspots() {
 
 	show_tooltip = false;
 
-	vector<Event>::iterator it;
+	std::vector<Event>::iterator it;
 
 	// work backwards through events because events can be erased in the loop.
 	// this prevents the iterator from becoming invalid.
@@ -672,26 +687,45 @@ void MapRenderer::checkHotspots() {
 		for (int x=it->hotspot.x; x < it->hotspot.x + it->hotspot.w; ++x) {
 			for (int y=it->hotspot.y; y < it->hotspot.y + it->hotspot.h; ++y) {
 				bool matched = false;
-				for (unsigned index = 0; index <= index_objectlayer; ++index) {
-					maprow *current_layer = layers[index];
-					Point p = map_to_screen(float(x),
-											float(y),
-											shakycam.x,
-											shakycam.y);
+				bool is_npc = false;
+
+				Event_Component* npc = (*it).getComponent("npc_hotspot");
+				if (npc) {
+					is_npc = true;
+
+					Point p = map_to_screen(float(npc->x), float(npc->y), shakycam.x, shakycam.y);
 					p = center_tile(p);
 
-					if (const short current_tile = current_layer[x][y]) {
-						// first check if mouse pointer is in rectangle of that tile:
-						Rect dest;
-						dest.x = p.x - tset.tiles[current_tile].offset.x;
-						dest.y = p.y - tset.tiles[current_tile].offset.y;
-						dest.w = tset.tiles[current_tile].tile->getClip().w;
-						dest.h = tset.tiles[current_tile].tile->getClip().h;
+					Rect dest;
+					dest.x = p.x - npc->z;
+					dest.y = p.y - npc->a;
+					dest.w = npc->b;
+					dest.h = npc->c;
 
-						if (isWithin(dest, inpt->mouse)) {
-							matched = true;
-							tip_pos.x = dest.x + dest.w/2;
-							tip_pos.y = dest.y;
+					if (isWithin(dest, inpt->mouse)) {
+						matched = true;
+						tip_pos.x = dest.x + dest.w/2;
+						tip_pos.y = p.y - npc_tooltip_margin;
+					}
+				}
+				else {
+					for (unsigned index = 0; index <= index_objectlayer; ++index) {
+						Point p = map_to_screen(float(x), float(y), shakycam.x, shakycam.y);
+						p = center_tile(p);
+
+						if (const short current_tile = layers[index][x][y]) {
+							// first check if mouse pointer is in rectangle of that tile:
+							Rect dest;
+							dest.x = p.x - tset.tiles[current_tile].offset.x;
+							dest.y = p.y - tset.tiles[current_tile].offset.y;
+							dest.w = tset.tiles[current_tile].tile->getClip().w;
+							dest.h = tset.tiles[current_tile].tile->getClip().h;
+
+							if (isWithin(dest, inpt->mouse)) {
+								matched = true;
+								tip_pos = map_to_screen(it->center.x, it->center.y, shakycam.x, shakycam.y);
+								tip_pos.y -= TILE_H;
+							}
 						}
 					}
 				}
@@ -714,7 +748,12 @@ void MapRenderer::checkHotspots() {
 
 						// only check events if the player is clicking
 						// and allowed to click
-						curs->setCursor(CURSOR_INTERACT);
+						if (is_npc) {
+							curs->setCursor(CURSOR_TALK);
+						}
+						else {
+							curs->setCursor(CURSOR_INTERACT);
+						}
 						if (!inpt->pressing[MAIN1]) return;
 						else if (inpt->lock[MAIN1]) return;
 
@@ -733,8 +772,8 @@ void MapRenderer::checkHotspots() {
 void MapRenderer::checkNearestEvent() {
 	if (NO_MOUSE) show_tooltip = false;
 
-	vector<Event>::iterator it;
-	vector<Event>::iterator nearest = events.end();
+	std::vector<Event>::iterator it;
+	std::vector<Event>::iterator nearest = events.end();
 	float best_distance = std::numeric_limits<float>::max();
 
 	// loop in reverse because we may erase elements
@@ -764,7 +803,12 @@ void MapRenderer::checkNearestEvent() {
 			// new tooltip?
 			createTooltip((*nearest).getComponent("tooltip"));
 			tip_pos = map_to_screen((*nearest).center.x, (*nearest).center.y, shakycam.x, shakycam.y);
-			tip_pos.y -= TILE_H;
+			if ((*nearest).getComponent("npc_hotspot")) {
+				tip_pos.y -= npc_tooltip_margin;
+			}
+			else {
+				tip_pos.y -= TILE_H;
+			}
 		}
 
 		if (inpt->pressing[ACCEPT] && !inpt->lock[ACCEPT]) {
@@ -799,6 +843,11 @@ void MapRenderer::createTooltip(Event_Component *ec) {
  * Activate a power that is attached to an event
  */
 void MapRenderer::activatePower(int power_index, unsigned statblock_index, FPoint &target) {
+	if (power_index < 0 || (unsigned)power_index >= powers->powers.size()) {
+		logError("MapRenderer: Power index is out of bounds.");
+		return;
+	}
+
 	if (statblock_index < statblocks.size()) {
 		// check power cooldown before activating
 		if (statblocks[statblock_index].power_ticks[0] == 0) {
@@ -807,8 +856,18 @@ void MapRenderer::activatePower(int power_index, unsigned statblock_index, FPoin
 		}
 	}
 	else {
-		logError("MapRenderer: StatBlock index is out of bounds.\n");
+		logError("MapRenderer: StatBlock index is out of bounds.");
 	}
+}
+
+bool MapRenderer::isValidTile(const unsigned &tile) {
+	if (tile == 0)
+		return true;
+
+	if (tile >= tset.tiles.size())
+		return false;
+
+	return tset.tiles[tile].tile != NULL;
 }
 
 MapRenderer::~MapRenderer() {

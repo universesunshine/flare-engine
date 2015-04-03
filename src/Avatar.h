@@ -33,8 +33,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "SoundManager.h"
 #include "Utils.h"
 
-using namespace std;
-
 class Entity;
 class Hazard;
 class StatBlock;
@@ -86,7 +84,7 @@ private:
 	int getUntransformPower();
 
 	//variables for patfinding
-	vector<FPoint> path;
+	std::vector<FPoint> path;
 	FPoint prev_target;
 
 	void handlePower(std::vector<ActionData> &action_queue);
@@ -110,7 +108,7 @@ public:
 	void loadGraphics(std::vector<Layer_gfx> _img_gfx);
 	void loadStepFX(const std::string& stepname);
 
-	void logic(std::vector<ActionData> &action_queue, bool restrictPowerUse);
+	void logic(std::vector<ActionData> &action_queue, bool restrict_power_use, bool npc);
 	bool pressing_move();
 	void set_direction();
 	std::string log_msg;
@@ -123,11 +121,14 @@ public:
 	bool isTransforming() {
 		return transform_triggered;
 	}
+	void checkTransform();
 	bool setPowers;
 	bool revertPowers;
 	int untransform_power;
 	StatBlock *hero_stats;
 	StatBlock *charmed_stats;
+	FPoint transform_pos;
+	std::string transform_map;
 
 	virtual void resetActiveAnimation();
 	virtual Renderable getRender() {

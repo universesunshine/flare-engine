@@ -28,8 +28,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "WidgetScrollBar.h"
 #include "WidgetTooltip.h"
 
-using namespace std;
-
 WidgetListBox::WidgetListBox(int height, const std::string& _fileName)
 	: Widget()
 	, fileName(_fileName)
@@ -40,7 +38,7 @@ WidgetListBox::WidgetListBox(int height, const std::string& _fileName)
 	, vlabels(std::vector<WidgetLabel>(height,WidgetLabel()))
 	, rows(std::vector<Rect>(height,Rect()))
 	, tip(new WidgetTooltip())
-	, scrollbar(new WidgetScrollBar("images/menus/buttons/scrollbar_default.png"))
+	, scrollbar(new WidgetScrollBar())
 	, color_normal(font->getColor("widget_normal"))
 	, color_disabled(font->getColor("widget_disabled"))
 	, pos_scroll()
@@ -63,6 +61,11 @@ WidgetListBox::WidgetListBox(int height, const std::string& _fileName)
 
 bool WidgetListBox::checkClick() {
 	return checkClick(inpt->mouse.x,inpt->mouse.y);
+}
+
+void WidgetListBox::setPos(int offset_x, int offset_y) {
+	Widget::setPos(offset_x, offset_y);
+	refresh();
 }
 
 /**

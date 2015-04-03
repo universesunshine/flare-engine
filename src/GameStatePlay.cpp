@@ -60,8 +60,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "UtilsParsing.h"
 #include "MenuPowers.h"
 
-using namespace std;
-
 const int MENU_ENEMY_TIMEOUT = MAX_FRAMES_PER_SEC * 10;
 
 
@@ -111,10 +109,17 @@ GameStatePlay::GameStatePlay()
 	camp->currency = &menu->inv->currency;
 	camp->hero = &pc->stats;
 
-	loading->set(VIEW_W_HALF, VIEW_H_HALF, JUSTIFY_CENTER, VALIGN_CENTER, msg->get("Loading..."), color_normal);
+	loading->set(0, 0, JUSTIFY_CENTER, VALIGN_CENTER, msg->get("Loading..."), color_normal);
 
 	// load the config file for character titles
 	loadTitles();
+
+	refreshWidgets();
+}
+
+void GameStatePlay::refreshWidgets() {
+	menu->alignAll();
+	loading->setPos(VIEW_W_HALF, VIEW_H_HALF);
 }
 
 /**
@@ -122,7 +127,7 @@ GameStatePlay::GameStatePlay()
  */
 void GameStatePlay::resetGame() {
 	mapr->load("maps/spawn.txt");
-	load_counter++;
+	setLoadingFrame();
 	camp->clearAll();
 	pc->init();
 	pc->stats.currency = 0;
@@ -204,12 +209,12 @@ void GameStatePlay::checkEnemyFocus() {
  */
 bool GameStatePlay::restrictPowerUse() {
 	if(MOUSE_MOVE) {
-		if(inpt->pressing[MAIN1] && !inpt->pressing[SHIFT] && !(isWithin(menu->act->numberArea,inpt->mouse) || isWithin(menu->act->mouseArea,inpt->mouse) || isWithin(menu->act->menuArea, inpt->mouse))) {
+		if(inpt->pressing[MAIN1] && !inpt->pressing[SHIFT] && !menu->act->isWithinSlots(inpt->mouse) && !menu->act->isWithinMenus(inpt->mouse)) {
 			if(enemy == NULL) {
 				return true;
 			}
 			else {
-				if(menu->act->slot_enabled[10] && (powers->powers[menu->act->hotkeys[10]].target_party != enemy->stats.hero_ally))
+				if(ACTIONBAR_MAIN < menu->act->slots_count && menu->act->slot_enabled[ACTIONBAR_MAIN] && (powers->powers[menu->act->hotkeys[ACTIONBAR_MAIN]].target_party != enemy->stats.hero_ally))
 					return true;
 			}
 		}
@@ -271,11 +276,16 @@ void GameStatePlay::checkTeleport() {
 			mapr->cam.y = pc->stats.pos.y = pc->stats.teleport_destination.y;
 		}
 
-		for (unsigned int i=0; i < enemies->enemies.size(); i++) {
-			if(enemies->enemies[i]->stats.hero_ally && enemies->enemies[i]->stats.alive) {
-				mapr->collider.unblock(enemies->enemies[i]->stats.pos.x, enemies->enemies[i]->stats.pos.y);
-				enemies->enemies[i]->stats.pos.x = pc->stats.pos.x;
-				enemies->enemies[i]->stats.pos.y = pc->stats.pos.y;
+		// if we're not changing map, move allies to a the player's new position
+		// when changing maps, enemies->handleNewMap() does something similar to this
+		if (mapr->teleport_mapname == "") {
+			FPoint spawn_pos = mapr->collider.get_random_neighbor(floor(pc->stats.pos), 1, false);
+			for (unsigned int i=0; i < enemies->enemies.size(); i++) {
+				if(enemies->enemies[i]->stats.hero_ally && enemies->enemies[i]->stats.alive) {
+					mapr->collider.unblock(enemies->enemies[i]->stats.pos.x, enemies->enemies[i]->stats.pos.y);
+					enemies->enemies[i]->stats.pos = spawn_pos;
+					mapr->collider.block(enemies->enemies[i]->stats.pos.x, enemies->enemies[i]->stats.pos.y, true);
+				}
 			}
 		}
 
@@ -283,48 +293,36 @@ void GameStatePlay::checkTeleport() {
 		if (mapr->teleportation && mapr->teleport_mapname != "") {
 			std::string teleport_mapname = mapr->teleport_mapname;
 			mapr->teleport_mapname = "";
+			inpt->lock_all = (teleport_mapname == "maps/spawn.txt");
 			mapr->executeOnMapExitEvents();
 			showLoading();
 			mapr->load(teleport_mapname);
-			load_counter++;
+			setLoadingFrame();
 			enemies->handleNewMap();
 			hazards->handleNewMap();
 			loot->handleNewMap();
 			powers->handleNewMap(&mapr->collider);
 			menu->enemy->handleNewMap();
 			npcs->handleNewMap();
-			menu->vendor->npc = NULL;
-			menu->vendor->visible = false;
-			menu->talker->visible = false;
+			menu->npc->setNPC(NULL);
+			menu->vendor->setNPC(NULL);
+			menu->talker->setNPC(NULL);
 			menu->stash->visible = false;
-			menu->npc->visible = false;
 			menu->mini->prerender(&mapr->collider, mapr->w, mapr->h);
 			npc_id = nearest_npc = -1;
 
-			// store this as the new respawn point
-			mapr->respawn_map = teleport_mapname;
-			mapr->respawn_point.x = pc->stats.pos.x;
-			mapr->respawn_point.y = pc->stats.pos.y;
+			// store this as the new respawn point (provided the tile is open)
+			if (mapr->collider.is_valid_position(pc->stats.pos.x, pc->stats.pos.y, MOVEMENT_NORMAL, true)) {
+				mapr->respawn_map = teleport_mapname;
+				mapr->respawn_point = pc->stats.pos;
+			}
+			else {
+				logError("GameStatePlay: Spawn position (%d, %d) is blocked.", (int)pc->stats.pos.x, (int)pc->stats.pos.y);
+			}
 
 			// return to title (permadeath) OR auto-save
 			if (pc->stats.permadeath && pc->stats.corpse) {
-				stringstream filename;
-				filename << PATH_USER;
-				if (SAVE_PREFIX.length() > 0)
-					filename << SAVE_PREFIX << "_";
-				filename << "save" << game_slot << ".txt";
-				if (remove(filename.str().c_str()) != 0)
-					perror("Error deleting save from path");
-
-				// Remove stash
-				stringstream ss;
-				ss.str("");
-				ss << PATH_USER;
-				if (SAVE_PREFIX.length() > 0)
-					ss << SAVE_PREFIX << "_";
-				ss << "stash_HC" << game_slot << ".txt";
-				if (remove(ss.str().c_str()) != 0)
-					logError("GameStatePlay: Error deleting hardcore stash in slot %d\n", game_slot);
+				removeSaveDir(game_slot);
 
 				delete requestedGameState;
 				requestedGameState = new GameStateTitle();
@@ -408,6 +406,7 @@ void GameStatePlay::checkLog() {
 
 	// PowerManager has hints for powers
 	if (powers->log_msg != "") {
+		menu->log->add(powers->log_msg, LOG_TYPE_MESSAGES);
 		menu->hudlog->add(powers->log_msg);
 		powers->log_msg = "";
 	}
@@ -463,7 +462,7 @@ void GameStatePlay::checkTitle() {
 		if (titles[i].title == "") continue;
 
 		if (titles[i].level > 0 && pc->stats.level < titles[i].level) continue;
-		if (titles[i].power > 0 && find(pc->stats.powers_list.begin(), pc->stats.powers_list.end(), titles[i].power) == pc->stats.powers_list.end()) continue;
+		if (titles[i].power > 0 && std::find(pc->stats.powers_list.begin(), pc->stats.powers_list.end(), titles[i].power) == pc->stats.powers_list.end()) continue;
 		if (titles[i].requires_status != "" && !camp->checkStatus(titles[i].requires_status)) continue;
 		if (titles[i].requires_not != "" && camp->checkStatus(titles[i].requires_not)) continue;
 		if (titles[i].primary_stat != "") {
@@ -527,7 +526,7 @@ void GameStatePlay::checkEquipmentChange() {
 	if (menu->inv->changed_equipment) {
 
 		int feet_index = -1;
-		vector<Layer_gfx> img_gfx;
+		std::vector<Layer_gfx> img_gfx;
 		// load only displayable layers
 		for (unsigned int j=0; j<pc->layer_reference_order.size(); j++) {
 			Layer_gfx gfx;
@@ -647,38 +646,18 @@ void GameStatePlay::checkNotifications() {
 void GameStatePlay::checkNPCInteraction() {
 	if (pc->stats.attacking) return;
 
+	if (mapr->npc_id != -1)
+		npc_id = mapr->npc_id;
+
 	bool player_ok = pc->stats.alive && pc->stats.humanoid;
 	float interact_distance = 0;
-	int npc_click = -1;
-	nearest_npc = npcs->getNearestNPC(pc->stats.pos);
-
-	int npc_hover = -1;
-	if (!menu->npc->visible && !menu->talker->visible && !menu->vendor->visible)
-		npc_hover = npcs->checkNPCClick(inpt->mouse, mapr->cam);
-
-	// check for clicking on an NPC
-	if (inpt->pressing[MAIN1] && !inpt->lock[MAIN1] && !NO_MOUSE) {
-		npc_click = npc_hover;
-		if (npc_click != -1) npc_id = npc_click;
-	}
-	// if we press the ACCEPT key, find the nearest NPC to interact with
-	else if (nearest_npc != -1 && inpt->pressing[ACCEPT] && !inpt->lock[ACCEPT]) {
-		npc_id = npc_click = nearest_npc;
-	}
-
 	// check distance to this npc
-	if (npc_hover != -1) {
-		interact_distance = calcDist(pc->stats.pos, npcs->npcs[npc_hover]->pos);
-		if (interact_distance < INTERACT_RANGE && player_ok) {
-			curs->setCursor(CURSOR_TALK);
-		}
-	}
-	else if (npc_id != -1) {
+	if (npc_id != -1) {
 		interact_distance = calcDist(pc->stats.pos, npcs->npcs[npc_id]->pos);
 	}
 
 	if (mapr->event_npc != "") {
-		npc_id = npcs->getID(mapr->event_npc);
+		npc_id = mapr->npc_id = npcs->getID(mapr->event_npc);
 		if (npc_id != -1) {
 			eventDialogOngoing = true;
 			eventPendingDialog = true;
@@ -688,7 +667,7 @@ void GameStatePlay::checkNPCInteraction() {
 
 	// if close enough to the NPC, open the appropriate interaction screen
 
-	if (npc_id != -1 && ((npc_click != -1 && interact_distance < INTERACT_RANGE && player_ok) || eventPendingDialog)) {
+	if (npc_id != -1 && mapr->npc_id != -1 && ((interact_distance < INTERACT_RANGE && player_ok) || eventPendingDialog)) {
 
 		if (inpt->pressing[MAIN1] && !NO_MOUSE) inpt->lock[MAIN1] = true;
 		if (inpt->pressing[ACCEPT]) inpt->lock[ACCEPT] = true;
@@ -700,46 +679,37 @@ void GameStatePlay::checkNPCInteraction() {
 			menu->npc->visible = true;
 	}
 
+	mapr->npc_id = -1;
+
 	// check if a NPC action selection is made
 	if (npc_id != -1 && (menu->npc->selection() || eventPendingDialog)) {
-		if (menu->npc->vendor_selected) {
+		if (menu->npc->vendor_selected && !menu->vendor->visible) {
 			// begin trading
-			menu->vendor->setTab(0); // Show the NPC's inventory as opposed to the buyback tab
-			menu->vendor->npc = npcs->npcs[npc_id];
-			menu->vendor->setInventory();
 			menu->closeAll();
-			menu->vendor->visible = true;
+			menu->vendor->setNPC(npcs->npcs[npc_id]);
 			menu->inv->visible = true;
-			snd->play(menu->vendor->sfx_open);
-			npcs->npcs[npc_id]->playSound(NPC_VOX_INTRO);
 		}
-		else if (menu->npc->dialog_selected) {
+		else if (menu->npc->dialog_selected && !menu->talker->visible) {
 			// begin talking
-			menu->talker->npc = npcs->npcs[npc_id];
+			menu->closeAll();
+			menu->talker->setNPC(npcs->npcs[npc_id]);
 			menu->talker->chooseDialogNode(menu->npc->selected_dialog_node);
 			pc->allow_movement = npcs->npcs[npc_id]->checkMovement(menu->npc->selected_dialog_node);
-
-			menu->closeAll();
-			menu->talker->visible = true;
 		}
 
 		menu->npc->setNPC(NULL);
 		eventPendingDialog = false;
 	}
 
-	// check for walking away from an NPC
 	if (npc_id != -1 && !eventDialogOngoing) {
+		// check for walking away from an NPC
 		if (interact_distance > INTERACT_RANGE || !player_ok) {
-			if (menu->vendor->visible || menu->talker->visible || menu->npc->visible) {
-				menu->closeAll();
-			}
 			menu->npc->setNPC(NULL);
-			menu->vendor->npc = NULL;
-			menu->talker->npc = NULL;
-			npc_id = -1;
+			menu->vendor->setNPC(NULL);
+			menu->talker->setNPC(NULL);
 		}
 	}
-	else if ((!menu->vendor->visible && !menu->talker->visible) || npc_click != -1) {
+	else if (!menu->vendor->visible && !menu->talker->visible) {
 		eventDialogOngoing = false;
 	}
 
@@ -747,6 +717,11 @@ void GameStatePlay::checkNPCInteraction() {
 	if (!menu->talker->visible) {
 		pc->allow_movement = true;
 	}
+
+	if (npc_id != -1 && !menu->talker->visible && !menu->vendor->visible && !menu->npc->visible) {
+		npc_id = -1;
+	}
+
 }
 
 void GameStatePlay::checkStash() {
@@ -825,10 +800,10 @@ void GameStatePlay::checkSaveEvent() {
 /**
  * Recursively update the action bar powers based on equipment
  */
-void GameStatePlay::updateActionBar(int index) {
-	if (index < 0 || index > 11) return;
+void GameStatePlay::updateActionBar(unsigned index) {
+	if (menu->act->slots_count == 0 || index > menu->act->slots_count - 1) return;
 
-	for (int i=index; i<12; i++) {
+	for (unsigned i = index; i < menu->act->slots_count; i++) {
 		if (menu->act->hotkeys[i] == 0) continue;
 
 		for (int j=0; j<menu->inv->inventory[EQUIPMENT].getSlotNumber(); j++) {
@@ -850,6 +825,8 @@ void GameStatePlay::updateActionBar(int index) {
  * This includes some message passing between child object
  */
 void GameStatePlay::logic() {
+	if (inpt->window_resized)
+		refreshWidgets();
 
 	checkCutscene();
 
@@ -862,14 +839,14 @@ void GameStatePlay::logic() {
 		if (pc->stats.alive) checkLoot();
 		checkEnemyFocus();
 		if (pc->stats.alive) {
-			checkNPCInteraction();
 			mapr->checkHotspots();
 			mapr->checkNearestEvent();
+			checkNPCInteraction();
 		}
 		checkTitle();
 
 		menu->act->checkAction(action_queue);
-		pc->logic(action_queue, restrictPowerUse());
+		pc->logic(action_queue, restrictPowerUse(), npc_id != -1);
 
 		// Transform powers change the actionbar layout,
 		// so we need to prevent accidental clicks if a new power is placed under the slot we clicked on.
@@ -889,6 +866,8 @@ void GameStatePlay::logic() {
 		npcs->logic();
 
 		snd->logic(pc->stats.pos);
+
+		comb->logic(mapr->cam);
 	}
 
 	// close menus when the player dies, but still allow them to be reopened
@@ -913,31 +892,33 @@ void GameStatePlay::logic() {
 	mapr->enemies_cleared = enemies->isCleared();
 	quests->logic();
 
+	pc->checkTransform();
 
 	// change hero powers on transformation
 	if (pc->setPowers) {
 		pc->setPowers = false;
 		if (!pc->stats.humanoid && menu->pow->visible) menu->closeRight();
 		// save ActionBar state and lock slots from removing/replacing power
-		for (int i=0; i<12 ; i++) {
+		for (int i=0; i<ACTIONBAR_MAX ; i++) {
 			menu->act->hotkeys_temp[i] = menu->act->hotkeys[i];
 			menu->act->hotkeys[i] = 0;
 		}
-		int count = 10;
+		int count = ACTIONBAR_MAIN;
+		// creatures can have up to 4 powers
 		for (int i=0; i<4 ; i++) {
 			if (pc->charmed_stats->power_index[i] != 0) {
 				menu->act->hotkeys[count] = pc->charmed_stats->power_index[i];
 				menu->act->locked[count] = true;
 				count++;
 			}
-			if (count == 12) count = 0;
+			if (count == ACTIONBAR_MAX) count = 0;
 		}
 		if (pc->stats.manual_untransform && pc->untransform_power > 0) {
 			menu->act->hotkeys[count] = pc->untransform_power;
 			menu->act->locked[count] = true;
 		}
 		else if (pc->stats.manual_untransform && pc->untransform_power == 0)
-			logError("GameStatePlay: Untransform power not found, you can't untransform manually\n");
+			logError("GameStatePlay: Untransform power not found, you can't untransform manually");
 
 		menu->act->updated = true;
 
@@ -950,7 +931,7 @@ void GameStatePlay::logic() {
 		pc->revertPowers = false;
 
 		// restore ActionBar state
-		for (int i=0; i<12 ; i++) {
+		for (int i=0; i<ACTIONBAR_MAX; i++) {
 			menu->act->hotkeys[i] = menu->act->hotkeys_temp[i];
 			menu->act->locked[i] = false;
 		}
@@ -985,7 +966,7 @@ void GameStatePlay::logic() {
 		menu->act->updated = false;
 
 		// set all hotkeys to their base powers
-		for (int i=0; i<12; i++) {
+		for (unsigned i = 0; i < menu->act->slots_count; i++) {
 			menu->act->hotkeys_mod[i] = menu->act->hotkeys[i];
 		}
 
@@ -1001,8 +982,8 @@ void GameStatePlay::render() {
 
 	// Create a list of Renderables from all objects not already on the map.
 	// split the list into the beings alive (may move) and dead beings (must not move)
-	vector<Renderable> rens;
-	vector<Renderable> rens_dead;
+	std::vector<Renderable> rens;
+	std::vector<Renderable> rens_dead;
 
 	pc->addRenders(rens, rens_dead);
 
@@ -1020,7 +1001,6 @@ void GameStatePlay::render() {
 
 	// mouseover tooltips
 	loot->renderTooltips(mapr->cam);
-	npcs->renderTooltips(mapr->cam, inpt->mouse, nearest_npc);
 
 	if (mapr->map_change) {
 		menu->mini->prerender(&mapr->collider, mapr->w, mapr->h);
@@ -1032,9 +1012,7 @@ void GameStatePlay::render() {
 
 	// render combat text last - this should make it obvious you're being
 	// attacked, even if you have menus open
-	CombatText *combat_text = comb;
-	combat_text->setCam(mapr->cam);
-	combat_text->render();
+	comb->render();
 }
 
 void GameStatePlay::showLoading() {
@@ -1065,6 +1043,10 @@ void GameStatePlay::loadPowerTree() {
 
 	// fall back to the default power tree
 	menu->pow->loadPowerTree("powers/trees/default.txt");
+}
+
+bool GameStatePlay::isPaused() {
+	return menu->pause;
 }
 
 Avatar *GameStatePlay::getAvatar() const {

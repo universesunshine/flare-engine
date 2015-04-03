@@ -36,6 +36,8 @@ public:
 	std::string description;
 };
 
+const int ACTIONBAR_MAX = 12; // maximum number of slots in MenuActionBar
+
 class HeroClass {
 public:
 	std::string name;
@@ -46,7 +48,7 @@ public:
 	int mental;
 	int offense;
 	int defense;
-	int hotkeys[12];
+	std::vector<int> hotkeys;
 	std::vector<int> powers;
 	std::vector<std::string> statuses;
 	std::string power_tree;
@@ -60,11 +62,8 @@ public:
 		, mental(0)
 		, offense(0)
 		, defense(0)
+		, hotkeys(std::vector<int>(ACTIONBAR_MAX, 0))
 		, power_tree("") {
-		for (int i=0; i<12; i++) {
-			hotkeys[i] = 0;
-		}
-		powers.clear();
 	}
 };
 
@@ -95,10 +94,14 @@ extern unsigned short VIEW_W;
 extern unsigned short VIEW_H;
 extern unsigned short VIEW_W_HALF;
 extern unsigned short VIEW_H_HALF;
-extern short MIN_VIEW_W;
-extern short MIN_VIEW_H;
-extern bool DOUBLEBUF;
+extern unsigned short SCREEN_W;
+extern unsigned short SCREEN_H;
+extern short MIN_SCREEN_W;
+extern short MIN_SCREEN_H;
+extern bool VSYNC;
 extern bool HWSURFACE;
+extern bool TEXTURE_FILTER;
+extern bool IGNORE_TEXTURE_FILTER;
 extern bool CHANGE_GAMMA;
 extern float GAMMA;
 

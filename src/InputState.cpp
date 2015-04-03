@@ -32,8 +32,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include <math.h>
 
-using namespace std;
-
 InputState::InputState(void)
 	: done(false)
 	, mouse()
@@ -44,12 +42,12 @@ InputState::InputState(void)
 	, scroll_down(false)
 	, lock_scroll(false)
 	, touch_locked(false)
+	, lock_all(false)
+	, window_minimized(false)
+	, window_restored(false)
+	, window_resized(false)
 	, current_touch() {
-#if SDL_VERSION_ATLEAST(2,0,0)
 	SDL_StartTextInput();
-#else
-	SDL_EnableUNICODE(true);
-#endif
 
 	defaultQwertyKeyBindings();
 	defaultJoystickBindings();
@@ -208,8 +206,8 @@ void InputState::loadKeyBindings() {
  * Write current key bindings to config file
  */
 void InputState::saveKeyBindings() {
-	ofstream outfile;
-	outfile.open((PATH_CONF + FILE_KEYBINDINGS).c_str(), ios::out);
+	std::ofstream outfile;
+	outfile.open((PATH_CONF + FILE_KEYBINDINGS).c_str(), std::ios::out);
 
 	if (outfile.is_open()) {
 
@@ -245,7 +243,7 @@ void InputState::saveKeyBindings() {
 		outfile << "actionbar_use=" << binding[ACTIONBAR_USE] << "," << binding_alt[ACTIONBAR_USE] << "," << binding_joy[ACTIONBAR_USE] << "\n";
 		outfile << "developer_menu=" << binding[DEVELOPER_MENU] << "," << binding_alt[DEVELOPER_MENU] << "," << binding_joy[DEVELOPER_MENU] << "\n";
 
-		if (outfile.bad()) logError("InputState: Unable to write keybindings config file. No write access or disk is full!\n");
+		if (outfile.bad()) logError("InputState: Unable to write keybindings config file. No write access or disk is full!");
 		outfile.close();
 		outfile.clear();
 	}
@@ -253,11 +251,9 @@ void InputState::saveKeyBindings() {
 }
 
 void InputState::handle(bool dump_event) {
-	SDL_Event event;
+	if (lock_all) return;
 
-	if (! SDL_VERSION_ATLEAST(2,0,0)) {
-		SDL_GetMouseState(&mouse.x, &mouse.y);
-	}
+	SDL_Event event;
 
 	inkeys = "";
 
@@ -278,36 +274,16 @@ void InputState::handle(bool dump_event) {
 	while (SDL_PollEvent (&event)) {
 
 		if (dump_event) {
-			cout << event << endl;
+			std::cout << event << std::endl;
 		}
 
 		// grab symbol keys
-#if SDL_VERSION_ATLEAST(2,0,0)
 		if (event.type == SDL_TEXTINPUT) {
 			inkeys += event.text.text;
 		}
-#else
-		if (event.type == SDL_KEYDOWN) {
-			int ch = event.key.keysym.unicode;
-			// if it is printable char then write its utf-8 representation
-			if (ch >= 0x800) {
-				inkeys += (char) ((ch >> 12) | 0xe0);
-				inkeys += (char) (((ch >> 6) & 0x3f) | 0x80);
-				inkeys += (char) ((ch & 0x3f) | 0x80);
-			}
-			else if (ch >= 0x80) {
-				inkeys += (char) ((ch >> 6) | 0xc0);
-				inkeys += (char) ((ch & 0x3f) | 0x80);
-			}
-			else if (ch >= 32 && ch != 127) {
-				inkeys += (char)ch;
-			}
-		}
-#endif
 
 		switch (event.type) {
 
-#if SDL_VERSION_ATLEAST(2,0,0)
 #ifndef __ANDROID__
 			case SDL_MOUSEMOTION:
 				mouse.x = event.motion.x;
@@ -340,6 +316,24 @@ void InputState::handle(bool dump_event) {
 				}
 				last_button = event.button.button;
 				break;
+			case SDL_WINDOWEVENT:
+				if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+					window_resized = true;
+					render_device->windowResize();
+				}
+				break;
+#else
+			// detect restoring hidden Android app to bypass frameskip
+			case SDL_WINDOWEVENT:
+				if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
+					window_resized = true;
+					render_device->windowResize();
+				}
+				else if (event.window.event == SDL_WINDOWEVENT_MINIMIZED)
+					window_minimized = true;
+				else if (event.window.event == SDL_WINDOWEVENT_RESTORED)
+					window_restored = true;
+				break;
 #endif
 			// Android touch events
 			case SDL_FINGERMOTION:
@@ -364,36 +358,6 @@ void InputState::handle(bool dump_event) {
 				un_press[MAIN1] = true;
 				last_button = binding[MAIN1];
 				break;
-#else
-			case SDL_MOUSEBUTTONDOWN:
-				if (event.button.button == SDL_BUTTON_WHEELUP) {
-					scroll_up = true;
-				}
-				else if (event.button.button == SDL_BUTTON_WHEELDOWN) {
-					scroll_down = true;
-				}
-				if (!lock_scroll || (event.button.button != SDL_BUTTON_WHEELUP && event.button.button != SDL_BUTTON_WHEELDOWN)) {
-					for (int key=0; key<key_count; key++) {
-						if (event.button.button == binding[key] || event.button.button == binding_alt[key]) {
-							pressing[key] = true;
-							un_press[key] = false;
-						}
-					}
-				}
-				break;
-			case SDL_MOUSEBUTTONUP:
-				for (int key=0; key<key_count; key++) {
-					if ((scroll_up && (binding[key] == SDL_BUTTON_WHEELUP || binding_alt[key] == SDL_BUTTON_WHEELUP)) ||
-					    (scroll_down && (binding[key] == SDL_BUTTON_WHEELDOWN || binding_alt[key] == SDL_BUTTON_WHEELDOWN))) {
-						un_press[key] = true;
-					}
-					else if (event.button.button == binding[key] || event.button.button == binding_alt[key]) {
-						un_press[key] = true;
-					}
-				}
-				last_button = event.button.button;
-				break;
-#endif
 			case SDL_KEYDOWN:
 				for (int key=0; key<key_count; key++) {
 					if (event.key.keysym.sym == binding[key] || event.key.keysym.sym == binding_alt[key]) {
@@ -782,19 +746,11 @@ void InputState::showCursor() {
 }
 
 std::string InputState::getJoystickName(int index) {
-#if SDL_VERSION_ATLEAST(2,0,0)
 	return std::string(SDL_JoystickNameForIndex(index));
-#else
-	return std::string(SDL_JoystickName(index));
-#endif
 }
 
 std::string InputState::getKeyName(int key) {
-#if SDL_VERSION_ATLEAST(2,0,0)
 	return std::string(SDL_GetKeyName((SDL_Keycode)key));
-#else
-	return std::string(SDL_GetKeyName((SDLKey)key));
-#endif
 }
 
 InputState::~InputState() {

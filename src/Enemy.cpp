@@ -30,8 +30,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "UtilsMath.h"
 #include <math.h>
 
-using namespace std;
-
 Enemy::Enemy() : Entity() {
 
 	stats.cur_state = ENEMY_STANCE;
@@ -159,16 +157,6 @@ void Enemy::doRewards(int source_type) {
 	}
 
 	loot->addEnemyLoot(this);
-}
-
-void Enemy::InstantDeath() {
-	stats.effects.triggered_death = true;
-	stats.cur_state = ENEMY_DEAD;
-
-	stats.hp = 0;
-	play_sfx_die = true;
-	stats.corpse_ticks = CORPSE_TIMEOUT;
-	stats.effects.clearEffects();
 }
 
 /**

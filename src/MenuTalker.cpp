@@ -36,9 +36,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "WidgetLabel.h"
 #include "WidgetScrollBox.h"
 
-using namespace std;
-
-
 MenuTalker::MenuTalker(MenuManager *_menu)
 	: Menu()
 	, menu(_menu)
@@ -63,9 +60,15 @@ MenuTalker::MenuTalker(MenuManager *_menu)
 				continue;
 
 			// @ATTR close|x (integer), y (integer)|Position of the close button.
-			if(infile.key == "close") close_pos = toPoint(infile.val);
+			if(infile.key == "close") {
+				Point pos = toPoint(infile.val);
+				closeButton->setBasePos(pos.x, pos.y);
+			}
 			// @ATTR advance|x (integer), y (integer)|Position of the button to advance dialog.
-			else if(infile.key == "advance") advance_pos = toPoint(infile.val);
+			else if(infile.key == "advance") {
+				Point pos = toPoint(infile.val);
+				advanceButton->setBasePos(pos.x, pos.y);
+			}
 			// @ATTR dialogbox|x (integer), y (integer), w (integer), h (integer)|Position and dimensions of the text box graphics.
 			else if (infile.key == "dialogbox") dialog_pos = toRect(infile.val);
 			// @ATTR dialogtext|x (integer), y (integer), w (integer), h (integer)|Rectangle where the dialog text is placed.
@@ -87,14 +90,28 @@ MenuTalker::MenuTalker(MenuManager *_menu)
 	}
 
 	label_name = new WidgetLabel();
+	label_name->setBasePos(text_pos.x + text_offset.x, text_pos.y + text_offset.y);
+
 	textbox = new WidgetScrollBox(text_pos.w, text_pos.h-(text_offset.y*2));
+	textbox->setBasePos(text_pos.x, text_pos.y + text_offset.y);
 
 	tablist.add(advanceButton);
 	tablist.add(closeButton);
 	tablist.add(textbox);
 
 	align();
-	alignElements();
+}
+
+void MenuTalker::align() {
+	Menu::align();
+
+	advanceButton->setPos(window_area.x, window_area.y);
+	closeButton->setPos(window_area.x, window_area.y);
+
+	label_name->setPos(window_area.x, window_area.y);
+
+	textbox->setPos(window_area.x, window_area.y + label_name->bounds.h);
+	textbox->pos.h = text_pos.h - (text_offset.y*2) - label_name->bounds.h;
 }
 
 void MenuTalker::chooseDialogNode(int request_dialog_node) {
@@ -109,19 +126,6 @@ void MenuTalker::chooseDialogNode(int request_dialog_node) {
 	createBuffer();
 }
 
-void MenuTalker::alignElements() {
-	advanceButton->pos.x = window_area.x + advance_pos.x;
-	advanceButton->pos.y = window_area.y + advance_pos.y;
-
-	closeButton->pos.x = window_area.x + close_pos.x;
-	closeButton->pos.y = window_area.y + close_pos.y;
-
-	label_name->set(window_area.x+text_pos.x+text_offset.x, window_area.y+text_pos.y+text_offset.y, JUSTIFY_LEFT, VALIGN_TOP, "", color_normal, font_who);
-
-	textbox->pos.x = window_area.x + text_pos.x;
-	textbox->pos.y = window_area.y + text_pos.y+text_offset.y+label_name->bounds.h;
-	textbox->pos.h -= label_name->bounds.h;
-}
 /**
  * Menu interaction (enter/space/click to continue)
  */
@@ -135,7 +139,7 @@ void MenuTalker::logic() {
 	closeButton->enabled = false;
 
 	// determine active button
-	if (event_cursor < npc->dialog[dialog_node].size()-1) {
+	if ((unsigned)dialog_node < npc->dialog.size() && !npc->dialog[dialog_node].empty() && event_cursor < npc->dialog[dialog_node].size()-1) {
 		if (npc->dialog[dialog_node][event_cursor+1].type != "") {
 			advanceButton->enabled = true;
 			tablist.remove(closeButton);
@@ -185,19 +189,19 @@ void MenuTalker::logic() {
 			menu->npc->setNPC(NULL);
 
 		// end dialog
-		npc = NULL;
-		visible = false;
+		setNPC(NULL);
 	}
 }
 
 void MenuTalker::createBuffer() {
-	if (event_cursor >= npc->dialog[dialog_node].size()) return;
+	if ((unsigned)dialog_node >= npc->dialog.size() || event_cursor >= npc->dialog[dialog_node].size())
+		return;
 
-	string line;
+	std::string line;
 
 	// speaker name
-	string etype = npc->dialog[dialog_node][event_cursor].type;
-	string who;
+	std::string etype = npc->dialog[dialog_node][event_cursor].type;
+	std::string who;
 
 	if (etype == "him" || etype == "her") {
 		who = npc->name;
@@ -206,13 +210,14 @@ void MenuTalker::createBuffer() {
 		who = hero_name;
 	}
 
-	label_name->set(who);
+	label_name->set(window_area.x+text_pos.x+text_offset.x, window_area.y+text_pos.y+text_offset.y, JUSTIFY_LEFT, VALIGN_TOP, who, color_normal, font_who);
+
 
 	line = parseLine(npc->dialog[dialog_node][event_cursor].s);
 
 	// render dialog text to the scrollbox buffer
 	Point line_size = font->calc_size(line,textbox->pos.w-(text_offset.x*2));
-	textbox->resize(line_size.y);
+	textbox->resize(textbox->pos.w, line_size.y);
 	textbox->line_height = font->getLineHeight();
 	font->setFont(font_dialog);
 	font->render(
@@ -247,30 +252,32 @@ void MenuTalker::render() {
 	setBackgroundDest(dest);
 	Menu::render();
 
-	// show active portrait
-	string etype = npc->dialog[dialog_node][event_cursor].type;
-	if (etype == "him" || etype == "her") {
-		Sprite *r = npc->portrait;
-		if (r) {
-			src.w = dest.w = portrait_he.w;
-			src.h = dest.h = portrait_he.h;
-			dest.x = offset_x + portrait_he.x;
-			dest.y = offset_y + portrait_he.y;
+	if ((unsigned)dialog_node < npc->dialog.size() && event_cursor < npc->dialog[dialog_node].size()) {
+		// show active portrait
+		std::string etype = npc->dialog[dialog_node][event_cursor].type;
+		if (etype == "him" || etype == "her") {
+			Sprite *r = npc->portrait;
+			if (r) {
+				src.w = dest.w = portrait_he.w;
+				src.h = dest.h = portrait_he.h;
+				dest.x = offset_x + portrait_he.x;
+				dest.y = offset_y + portrait_he.y;
 
-			r->setClip(src);
-			r->setDest(dest);
-			render_device->render(r);
+				r->setClip(src);
+				r->setDest(dest);
+				render_device->render(r);
+			}
 		}
-	}
-	else if (etype == "you") {
-		if (portrait) {
-			src.w = dest.w = portrait_you.w;
-			src.h = dest.h = portrait_you.h;
-			dest.x = offset_x + portrait_you.x;
-			dest.y = offset_y + portrait_you.y;
-			portrait->setClip(src);
-			portrait->setDest(dest);
-			render_device->render(portrait);
+		else if (etype == "you") {
+			if (portrait) {
+				src.w = dest.w = portrait_you.w;
+				src.h = dest.h = portrait_you.h;
+				dest.x = offset_x + portrait_you.x;
+				dest.y = offset_y + portrait_you.y;
+				portrait->setClip(src);
+				portrait->setDest(dest);
+				render_device->render(portrait);
+			}
 		}
 	}
 
@@ -279,7 +286,7 @@ void MenuTalker::render() {
 	textbox->render();
 
 	// show advance button if there are more event components, or close button if not
-	if (event_cursor < npc->dialog[dialog_node].size()-1) {
+	if ((unsigned)dialog_node < npc->dialog.size() && !npc->dialog[dialog_node].empty() && event_cursor < npc->dialog[dialog_node].size()-1) {
 		if (npc->dialog[dialog_node][event_cursor+1].type != "") {
 			advanceButton->render();
 		}
@@ -309,18 +316,31 @@ void MenuTalker::setHero(StatBlock &stats) {
 	}
 }
 
-string MenuTalker::parseLine(const string &line) {
-	string new_line = line;
+std::string MenuTalker::parseLine(const std::string &line) {
+	std::string new_line = line;
 
 	// name
 	size_t index = new_line.find("%N");
-	if (index != string::npos) new_line = new_line.replace(index, 2, hero_name);
+	if (index != std::string::npos) new_line = new_line.replace(index, 2, hero_name);
 
 	// class
 	index = new_line.find("%C");
-	if (index != string::npos) new_line.replace(index, 2, hero_class);
+	if (index != std::string::npos) new_line.replace(index, 2, hero_class);
 
 	return new_line;
+}
+
+void MenuTalker::setNPC(NPC* _npc) {
+	npc = _npc;
+
+	if (_npc == NULL) {
+		visible = false;
+		return;
+	}
+
+	if (!visible) {
+		visible = true;
+	}
 }
 
 MenuTalker::~MenuTalker() {

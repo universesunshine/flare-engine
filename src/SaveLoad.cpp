@@ -40,11 +40,10 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "MenuStash.h"
 #include "MenuTalker.h"
 #include "Settings.h"
+#include "Utils.h"
 #include "UtilsFileSystem.h"
 #include "UtilsParsing.h"
 #include "SharedGameResources.h"
-
-using namespace std;
 
 /**
  * Before exiting the game, save to file
@@ -54,20 +53,19 @@ void GameStatePlay::saveGame() {
 	// game slots are currently 1-4
 	if (game_slot == 0) return;
 
+	// if needed, create the save file structure
+	createSaveDir(game_slot);
+
 	// remove items with zero quantity from inventory
 	menu->inv->inventory[EQUIPMENT].clean();
 	menu->inv->inventory[CARRIED].clean();
 
-	ofstream outfile;
+	std::ofstream outfile;
 
-	stringstream ss;
-	ss.str("");
-	ss << PATH_USER;
-	if (SAVE_PREFIX.length() > 0)
-		ss << SAVE_PREFIX << "_";
-	ss << "save" << game_slot << ".txt";
+	std::stringstream ss;
+	ss << PATH_USER << "saves/" << SAVE_PREFIX << "/" << game_slot << "/avatar.txt";
 
-	outfile.open(ss.str().c_str(), ios::out);
+	outfile.open(path(&ss).c_str(), std::ios::out);
 
 	if (outfile.is_open()) {
 
@@ -108,10 +106,17 @@ void GameStatePlay::saveGame() {
 
 		// action bar
 		outfile << "actionbar=";
-		for (int i=0; i<12; i++) {
-			if (pc->stats.transformed) outfile << menu->act->hotkeys_temp[i];
-			else outfile << menu->act->hotkeys[i];
-			if (i<11) outfile << ",";
+		for (unsigned i = 0; i < ACTIONBAR_MAX; i++) {
+			if (i < menu->act->slots_count)
+			{
+				if (pc->stats.transformed) outfile << menu->act->hotkeys_temp[i];
+				else outfile << menu->act->hotkeys[i];
+			}
+			else
+			{
+				outfile << 0;
+			}
+			if (i < ACTIONBAR_MAX - 1) outfile << ",";
 		}
 		outfile << "\n";
 
@@ -147,24 +152,21 @@ void GameStatePlay::saveGame() {
 		outfile << "campaign=";
 		outfile << camp->getAll();
 
-		outfile << endl;
+		outfile << std::endl;
 
-		if (outfile.bad()) logError("SaveLoad: Unable to save the game. No write access or disk is full!\n");
+		if (outfile.bad()) logError("SaveLoad: Unable to save the game. No write access or disk is full!");
 		outfile.close();
 		outfile.clear();
 	}
 
 	// Save stash
 	ss.str("");
-	ss << PATH_USER;
-	if (SAVE_PREFIX.length() > 0)
-		ss << SAVE_PREFIX << "_";
-	ss << "stash";
 	if (pc->stats.permadeath)
-		ss << "_HC" << game_slot;
-	ss << ".txt";
+		ss << PATH_USER << "saves/" << SAVE_PREFIX << "/" << game_slot << "/stash_HC.txt";
+	else
+		ss << PATH_USER << "saves/" << SAVE_PREFIX << "/stash.txt";
 
-	outfile.open(ss.str().c_str(), ios::out);
+	outfile.open(path(&ss).c_str(), std::ios::out);
 
 	if (outfile.is_open()) {
 
@@ -174,9 +176,9 @@ void GameStatePlay::saveGame() {
 		outfile << "quantity=" << menu->stash->stock.getQuantities() << "\n";
 		outfile << "item=" << menu->stash->stock.getItems() << "\n";
 
-		outfile << endl;
+		outfile << std::endl;
 
-		if (outfile.bad()) logError("SaveLoad: Unable to save stash. No write access or disk is full!\n");
+		if (outfile.bad()) logError("SaveLoad: Unable to save stash. No write access or disk is full!");
 		outfile.close();
 		outfile.clear();
 	}
@@ -198,20 +200,12 @@ void GameStatePlay::loadGame() {
 	if (game_slot == 0) return;
 
 	FileParser infile;
-	int hotkeys[12];
+	std::vector<int> hotkeys(ACTIONBAR_MAX, -1);
 
-	for (int i=0; i<12; i++) {
-		hotkeys[i] = -1;
-	}
+	std::stringstream ss;
+	ss << PATH_USER << "saves/" << SAVE_PREFIX << "/" << game_slot << "/avatar.txt";
 
-	stringstream ss;
-	ss.str("");
-	ss << PATH_USER;
-	if (SAVE_PREFIX.length() > 0)
-		ss << SAVE_PREFIX << "_";
-	ss << "save" << game_slot << ".txt";
-
-	if (infile.open(ss.str(), false)) {
+	if (infile.open(path(&ss), false)) {
 		while (infile.next()) {
 			if (infile.key == "name") pc->stats.name = infile.val;
 			else if (infile.key == "permadeath") {
@@ -243,7 +237,7 @@ void GameStatePlay::loadGame() {
 						pc->stats.offense_character < 0 || pc->stats.offense_character > pc->stats.max_points_per_stat ||
 						pc->stats.defense_character < 0 || pc->stats.defense_character > pc->stats.max_points_per_stat) {
 
-					logError("SaveLoad: Some basic stats are out of bounds, setting to zero\n");
+					logError("SaveLoad: Some basic stats are out of bounds, setting to zero");
 					pc->stats.physical_character = 0;
 					pc->stats.mental_character = 0;
 					pc->stats.offense_character = 0;
@@ -267,7 +261,7 @@ void GameStatePlay::loadGame() {
 			}
 			else if (infile.key == "spawn") {
 				mapr->teleport_mapname = infile.nextValue();
-				if (fileExists(mods->locate(mapr->teleport_mapname))) {
+				if (mapr->teleport_mapname != "" && fileExists(mods->locate(mapr->teleport_mapname))) {
 					mapr->teleport_destination.x = toInt(infile.nextValue()) + 0.5f;
 					mapr->teleport_destination.y = toInt(infile.nextValue()) + 0.5f;
 					mapr->teleportation = true;
@@ -275,26 +269,26 @@ void GameStatePlay::loadGame() {
 					mapr->clearEvents();
 				}
 				else {
-					logError("SaveLoad: Unable to find %s, loading maps/spawn.txt\n", mapr->teleport_mapname.c_str());
+					logError("SaveLoad: Unable to find %s, loading maps/spawn.txt", mapr->teleport_mapname.c_str());
 					mapr->teleport_mapname = "maps/spawn.txt";
-					mapr->teleport_destination.x = 1;
-					mapr->teleport_destination.y = 1;
+					mapr->teleport_destination.x = 0.5f;
+					mapr->teleport_destination.y = 0.5f;
 					mapr->teleportation = true;
 				}
 			}
 			else if (infile.key == "actionbar") {
-				for (int i=0; i<12; i++) {
+				for (int i = 0; i < ACTIONBAR_MAX; i++) {
 					hotkeys[i] = toInt(infile.nextValue());
 					if (hotkeys[i] < 0) {
-						logError("SaveLoad: Hotkey power on position %d has negative id, skipping\n", i);
+						logError("SaveLoad: Hotkey power on position %d has negative id, skipping", i);
 						hotkeys[i] = 0;
 					}
 					else if ((unsigned)hotkeys[i] > powers->powers.size()-1) {
-						logError("SaveLoad: Hotkey power id (%d) out of bounds 1-%d, skipping\n", hotkeys[i], (int)powers->powers.size());
+						logError("SaveLoad: Hotkey power id (%d) out of bounds 1-%d, skipping", hotkeys[i], (int)powers->powers.size());
 						hotkeys[i] = 0;
 					}
 					else if (hotkeys[i] != 0 && (unsigned)hotkeys[i] < powers->powers.size() && powers->powers[hotkeys[i]].name == "") {
-						logError("SaveLoad: Hotkey power with id=%d, found on position %d does not exist, skipping\n", hotkeys[i], i);
+						logError("SaveLoad: Hotkey power with id=%d, found on position %d does not exist, skipping", hotkeys[i], i);
 						hotkeys[i] = 0;
 					}
 				}
@@ -308,7 +302,7 @@ void GameStatePlay::loadGame() {
 				}
 			}
 			else if (infile.key == "powers") {
-				string power;
+				std::string power;
 				while ( (power = infile.nextValue()) != "") {
 					if (toInt(power) > 0)
 						pc->stats.powers_list.push_back(toInt(power));
@@ -319,7 +313,7 @@ void GameStatePlay::loadGame() {
 
 		infile.close();
 	}
-	else logError("SaveLoad: Unable to open %s!\n", ss.str().c_str());
+	else logError("SaveLoad: Unable to open %s!", ss.str().c_str());
 
 	// add legacy currency to inventory
 	menu->inv->addCurrency(currency);
@@ -331,13 +325,13 @@ void GameStatePlay::loadGame() {
 	// powers->activatePassives(pc->stats);
 	if (SAVE_HPMP && saved_hp != 0) {
 		if (saved_hp < 0 || saved_hp > pc->stats.get(STAT_HP_MAX)) {
-			logError("SaveLoad: HP value is out of bounds, setting to maximum\n");
+			logError("SaveLoad: HP value is out of bounds, setting to maximum");
 			pc->stats.hp = pc->stats.get(STAT_HP_MAX);
 		}
 		else pc->stats.hp = saved_hp;
 
 		if (saved_mp < 0 || saved_mp > pc->stats.get(STAT_MP_MAX)) {
-			logError("SaveLoad: MP value is out of bounds, setting to maximum\n");
+			logError("SaveLoad: MP value is out of bounds, setting to maximum");
 			pc->stats.mp = pc->stats.get(STAT_MP_MAX);
 		}
 		else pc->stats.mp = saved_mp;
@@ -349,12 +343,19 @@ void GameStatePlay::loadGame() {
 
 	// reset character menu
 	menu->chr->refreshStats();
+
+	loadPowerTree();
 }
 
 /**
  * Load a class definition, index
  */
 void GameStatePlay::loadClass(int index) {
+	if (index < 0 || (unsigned)index >= HERO_CLASSES.size()) {
+		logError("SaveLoad: Class index out of bounds.");
+		return;
+	}
+
 	// game slots are currently 1-4
 	if (game_slot == 0) return;
 
@@ -386,17 +387,13 @@ void GameStatePlay::loadClass(int index) {
 void GameStatePlay::loadStash() {
 	// Load stash
 	FileParser infile;
-	stringstream ss;
-	ss.str("");
-	ss << PATH_USER;
-	if (SAVE_PREFIX.length() > 0)
-		ss << SAVE_PREFIX << "_";
-	ss << "stash";
+	std::stringstream ss;
 	if (pc->stats.permadeath)
-		ss << "_HC" << game_slot;
-	ss << ".txt";
+		ss << PATH_USER << "saves/" << SAVE_PREFIX << "/" << game_slot << "/stash_HC.txt";
+	else
+		ss << PATH_USER << "saves/" << SAVE_PREFIX << "/stash.txt";
 
-	if (infile.open(ss.str(), false)) {
+	if (infile.open(path(&ss), false)) {
 		while (infile.next()) {
 			if (infile.key == "item") {
 				menu->stash->stock.setItems(infile.val);
@@ -407,7 +404,7 @@ void GameStatePlay::loadStash() {
 		}
 		infile.close();
 	}
-	else logError("SaveLoad: Unable to open %s!\n", ss.str().c_str());
+	else logError("SaveLoad: Unable to open %s!", ss.str().c_str());
 
 	menu->stash->stock.clean();
 }

@@ -21,11 +21,10 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "Settings.h"
 #include "SharedResources.h"
 #include "Utils.h"
+#include "UtilsFileSystem.h"
 
 #include <cmath>
 #include <stdarg.h>
-
-using namespace std;
 
 Point floor(FPoint fp) {
 	Point result;
@@ -199,7 +198,7 @@ float calcTheta(float x1, float y1, float x2, float y2) {
 }
 
 std::string abbreviateKilo(int amount) {
-	stringstream ss;
+	std::stringstream ss;
 	if (amount < 1000)
 		ss << amount;
 	else
@@ -208,37 +207,37 @@ std::string abbreviateKilo(int amount) {
 	return ss.str();
 }
 
-void alignToScreenEdge(std::string alignment, Rect *r) {
+void alignToScreenEdge(ALIGNMENT alignment, Rect *r) {
 	if (!r) return;
 
-	if (alignment == "topleft") {
+	if (alignment == ALIGN_TOPLEFT) {
 		// do nothing
 	}
-	else if (alignment == "top") {
+	else if (alignment == ALIGN_TOP) {
 		r->x = (VIEW_W_HALF-r->w/2)+r->x;
 	}
-	else if (alignment == "topright") {
+	else if (alignment == ALIGN_TOPRIGHT) {
 		r->x = (VIEW_W-r->w)+r->x;
 	}
-	else if (alignment == "left") {
+	else if (alignment == ALIGN_LEFT) {
 		r->y = (VIEW_H_HALF-r->h/2)+r->y;
 	}
-	else if (alignment == "center") {
+	else if (alignment == ALIGN_CENTER) {
 		r->x = (VIEW_W_HALF-r->w/2)+r->x;
 		r->y = (VIEW_H_HALF-r->h/2)+r->y;
 	}
-	else if (alignment == "right") {
+	else if (alignment == ALIGN_RIGHT) {
 		r->x = (VIEW_W-r->w)+r->x;
 		r->y = (VIEW_H_HALF-r->h/2)+r->y;
 	}
-	else if (alignment == "bottomleft") {
+	else if (alignment == ALIGN_BOTTOMLEFT) {
 		r->y = (VIEW_H-r->h)+r->y;
 	}
-	else if (alignment == "bottom") {
+	else if (alignment == ALIGN_BOTTOM) {
 		r->x = (VIEW_W_HALF-r->w/2)+r->x;
 		r->y = (VIEW_H-r->h)+r->y;
 	}
-	else if (alignment == "bottomright") {
+	else if (alignment == ALIGN_BOTTOMRIGHT) {
 		r->x = (VIEW_W-r->w)+r->x;
 		r->y = (VIEW_H-r->h)+r->y;
 	}
@@ -267,12 +266,7 @@ void logInfo(const char* format, ...) {
 
 	va_start(args, format);
 
-#if SDL_VERSION_ATLEAST(2,0,0)
 	SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO, format, args);
-#else
-	printf("INFO: ");
-	vprintf(format, args);
-#endif
 
 	va_end(args);
 }
@@ -282,13 +276,33 @@ void logError(const char* format, ...) {
 
 	va_start(args, format);
 
-#if SDL_VERSION_ATLEAST(2,0,0)
 	SDL_LogMessageV(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_ERROR, format, args);
-#else
-	printf("ERROR: ");
-	vprintf(format, args);
-#endif
 
 	va_end(args);
+}
+
+void createSaveDir(int slot) {
+	// game slots are currently 1-4
+	if (slot == 0) return;
+
+	std::stringstream ss;
+	ss << PATH_USER << "saves/" << SAVE_PREFIX << "/";
+
+	createDir(path(&ss));
+
+	ss << slot;
+	createDir(path(&ss));
+}
+
+void removeSaveDir(int slot) {
+	// game slots are currently 1-4
+	if (slot == 0) return;
+
+	std::stringstream ss;
+	ss << PATH_USER << "saves/" << SAVE_PREFIX << "/" << slot;
+
+	if (isDirectory(path(&ss))) {
+		removeDirRecursive(path(&ss));
+	}
 }
 

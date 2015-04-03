@@ -35,8 +35,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "UtilsMath.h"
 #include <limits>
 
-using namespace std;
-
 StatBlock::StatBlock()
 	: statsLoaded(false)
 	, alive(true)
@@ -252,7 +250,7 @@ bool StatBlock::loadSfxStat(FileParser *infile) {
 /**
  * load a statblock, typically for an enemy definition
  */
-void StatBlock::load(const string& filename) {
+void StatBlock::load(const std::string& filename) {
 	// @CLASS StatBlock: Enemies|Description of enemies in enemies/
 	FileParser infile;
 	if (!infile.open(filename))
@@ -310,7 +308,7 @@ void StatBlock::load(const string& filename) {
 			quest_loot_id = toInt(infile.nextValue());
 		}
 		// combat stats
-		// @ATTR cooldown|integer|Cooldown between attacks.
+		// @ATTR cooldown|integer|Cooldown between attacks in 'ms' or 's'.
 		else if (infile.key == "cooldown") cooldown = parse_duration(infile.val);
 
 		// behavior stats
@@ -321,10 +319,10 @@ void StatBlock::load(const string& filename) {
 		// @ATTR facing|boolean|Creature can turn to face their target.
 		else if (infile.key == "facing") facing = toBool(infile.val);
 
-		// @ATTR waypoint_pause|duration|Duration to wait at each waypoint.
+		// @ATTR waypoint_pause|duration|Duration to wait at each waypoint in 'ms' or 's'.
 		else if (infile.key == "waypoint_pause") waypoint_pause = parse_duration(infile.val);
 
-		// @ATTR turn_delay|duration|Duration it takes for this creature to turn and face their target.
+		// @ATTR turn_delay|duration|Duration it takes for this creature to turn and face their target in 'ms' or 's'.
 		else if (infile.key == "turn_delay") turn_delay = parse_duration(infile.val);
 		// @ATTR chance_pursue|integer|Percentage change that the creature will chase their target.
 		else if (infile.key == "chance_pursue") chance_pursue = num;
@@ -369,7 +367,7 @@ void StatBlock::load(const string& filename) {
 		else if (infile.key == "chance_on_debuff") power_chance[ON_DEBUFF] = num;
 		// @ATTR chance_on_join_combat|integer|Percentage chance that power_on_join_combat will be triggered.
 		else if (infile.key == "chance_on_join_combat") power_chance[ON_JOIN_COMBAT] = num;
-		// @ATTR cooldown_hit|duration|Duration of cooldown after being hit.
+		// @ATTR cooldown_hit|duration|Duration of cooldown after being hit in 'ms' or 's'.
 		else if (infile.key == "cooldown_hit") cooldown_hit = parse_duration(infile.val);
 
 		else if (infile.key == "passive_powers") {
@@ -397,13 +395,13 @@ void StatBlock::load(const string& filename) {
 		// @ATTR animations|string|Filename of an animation definition.
 		else if (infile.key == "animations") animations = infile.val;
 
-		// @ATTR supress_hp|boolean|Hides the enemy HP bar for this creature.
+		// @ATTR suppress_hp|boolean|Hides the enemy HP bar for this creature.
 		else if (infile.key == "suppress_hp") suppress_hp = toBool(infile.val);
 
 		else if (infile.key == "categories") {
 			// @ATTR categories|category (string), ...|Categories that this enemy belongs to.
 			categories.clear();
-			string cat;
+			std::string cat;
 			while ((cat = infile.nextValue()) != "") {
 				categories.push_back(cat);
 			}
@@ -453,6 +451,9 @@ void StatBlock::recalc() {
 			check_title = true;
 		}
 	}
+
+	if (xp >= xp_table.back())
+		xp = xp_table.back();
 
 	applyEffects();
 
@@ -631,6 +632,9 @@ void StatBlock::logic() {
 	if (intangible) movement_type = MOVEMENT_INTANGIBLE;
 	else if (flying) movement_type = MOVEMENT_FLYING;
 	else movement_type = MOVEMENT_NORMAL;
+
+	if (hp == 0)
+		removeSummons();
 }
 
 StatBlock::~StatBlock() {
@@ -722,10 +726,29 @@ void StatBlock::loadHeroSFX() {
 	}
 }
 
+/**
+ * Recursivly kill all summoned creatures
+ */
+void StatBlock::removeSummons() {
+	for (std::vector<StatBlock*>::iterator it = summons.begin(); it != summons.end(); ++it) {
+		(*it)->hp = 0;
+		(*it)->effects.triggered_death = true;
+		(*it)->effects.clearEffects();
+		if (!(*it)->hero) {
+			(*it)->cur_state = ENEMY_DEAD;
+			(*it)->corpse_ticks = CORPSE_TIMEOUT;
+		}
+		(*it)->removeSummons();
+		(*it)->summoner = NULL;
+	}
+
+	summons.clear();
+}
+
 void StatBlock::removeFromSummons() {
 
 	if(summoner != NULL && !summoner->summons.empty()) {
-		vector<StatBlock*>::iterator parent_ref = find(summoner->summons.begin(), summoner->summons.end(), this);
+		std::vector<StatBlock*>::iterator parent_ref = std::find(summoner->summons.begin(), summoner->summons.end(), this);
 
 		if(parent_ref != summoner->summons.end())
 			summoner->summons.erase(parent_ref);
@@ -733,12 +756,7 @@ void StatBlock::removeFromSummons() {
 		summoner = NULL;
 	}
 
-	if (!summons.empty()) {
-		for (vector<StatBlock*>::iterator it=summons.begin(); it != summons.end(); ++it)
-			(*it)->summoner = NULL;
-
-		summons.clear();
-	}
+	removeSummons();
 }
 
 bool StatBlock::summonLimitReached(int power_id) const {
@@ -801,7 +819,7 @@ void StatBlock::setWanderArea(int r) {
  * For the sake of consistency with previous versions,
  * this means returning the generated subclass
  */
-std::string StatBlock:: getShortClass() {
+std::string StatBlock::getShortClass() {
 	if (character_subclass == "")
 		return msg->get(character_class);
 	else
@@ -817,4 +835,11 @@ std::string StatBlock::getLongClass() {
 		return msg->get(character_class);
 	else
 		return msg->get(character_class) + " / " + msg->get(character_subclass);
+}
+
+void StatBlock::addXP(int amount) {
+	xp += amount;
+
+	if (xp >= xp_table.back())
+		xp = xp_table.back();
 }

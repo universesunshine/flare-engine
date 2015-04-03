@@ -34,8 +34,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "UtilsParsing.h"
 #include "WidgetButton.h"
 
-using namespace std;
-
 MenuInventory::MenuInventory(StatBlock *_stats) {
 	stats = _stats;
 	MAX_EQUIPPED = 4;
@@ -57,7 +55,6 @@ MenuInventory::MenuInventory(StatBlock *_stats) {
 	closeButton = new WidgetButton("images/menus/buttons/button_x.png");
 
 	// Load config settings
-	Rect equipment_slot;
 	FileParser infile;
 	// @CLASS MenuInventory|Description of menus/inventory.txt
 	if (infile.open("menus/inventory.txt")) {
@@ -66,26 +63,34 @@ MenuInventory::MenuInventory(StatBlock *_stats) {
 				continue;
 
 			// @ATTR close|x (integer), y (integer)|Position of the close button.
-			if(infile.key == "close") close_pos = toPoint(infile.val);
+			if(infile.key == "close") {
+				Point pos = toPoint(infile.val);
+				closeButton->setBasePos(pos.x, pos.y);
+			}
 			// @ATTR equipment_slot|x (integer), y (integer), size (integer), slot_type (string)|Position and item type of an equipment slot.
 			else if(infile.key == "equipment_slot") {
-				equipment_slot.x = popFirstInt(infile.val);
-				equipment_slot.y = popFirstInt(infile.val);
-				equipment_slot.w = equipment_slot.h = popFirstInt(infile.val);
-				equipped_area.push_back(equipment_slot);
+				Rect area;
+				Point pos;
+
+				pos.x = area.x = popFirstInt(infile.val);
+				pos.y = area.y = popFirstInt(infile.val);
+				area.w = area.h = popFirstInt(infile.val);
+				equipped_area.push_back(area);
+				equipped_pos.push_back(pos);
 				slot_type.push_back(popFirstString(infile.val));
 			}
 			// @ATTR slot_name|string|The displayed name of the last defined equipment slot.
 			else if(infile.key == "slot_name") slot_desc.push_back(infile.val);
 			// @ATTR carried_area|x (integer), y (integer)|Position of the first normal inventory slot.
 			else if(infile.key == "carried_area") {
-				carried_area.x = popFirstInt(infile.val);
-				carried_area.y = popFirstInt(infile.val);
+				Point pos;
+				carried_pos.x = carried_area.x = popFirstInt(infile.val);
+				carried_pos.y = carried_area.y = popFirstInt(infile.val);
 			}
 			// @ATTR carried_cols|integer|The number of columns for the normal inventory.
-			else if (infile.key == "carried_cols") carried_cols = max(1, toInt(infile.val));
+			else if (infile.key == "carried_cols") carried_cols = std::max(1, toInt(infile.val));
 			// @ATTR carried_rows|integer|The number of rows for the normal inventory.
-			else if (infile.key == "carried_rows") carried_rows = max(1, toInt(infile.val));
+			else if (infile.key == "carried_rows") carried_rows = std::max(1, toInt(infile.val));
 			// @ATTR label_title|label|Position of the "Inventory" label.
 			else if (infile.key == "label_title") title =  eatLabelInfo(infile.val);
 			// @ATTR currency|label|Position of the label that displays the total currency being carried.
@@ -101,31 +106,14 @@ MenuInventory::MenuInventory(StatBlock *_stats) {
 	MAX_EQUIPPED = equipped_area.size();
 	MAX_CARRIED = carried_cols * carried_rows;
 
-	color_normal = font->getColor("menu_normal");
-	color_high = font->getColor("menu_bonus");
-
-	align();
-	alignElements();
-}
-
-void MenuInventory::alignElements() {
-	for (int i=0; i<MAX_EQUIPPED; i++) {
-		equipped_area[i].x += window_area.x;
-		equipped_area[i].y += window_area.y;
-	}
-
-	carried_area.x += window_area.x;
-	carried_area.y += window_area.y;
 	carried_area.w = carried_cols*ICON_SIZE;
 	carried_area.h = carried_rows*ICON_SIZE;
 
+	color_normal = font->getColor("menu_normal");
+	color_high = font->getColor("menu_bonus");
+
 	inventory[EQUIPMENT].init(MAX_EQUIPPED, equipped_area, slot_type);
 	inventory[CARRIED].init(MAX_CARRIED, carried_area, ICON_SIZE, carried_cols);
-
-	closeButton->pos.x = window_area.x+close_pos.x;
-	closeButton->pos.y = window_area.y+close_pos.y;
-
-	label_inventory.set(window_area.x+title.x, window_area.y+title.y, title.justify, title.valign, msg->get("Inventory"), color_normal, title.font_style);
 
 	for (int i = 0; i < MAX_EQUIPPED; i++) {
 		tablist.add(inventory[EQUIPMENT].slots[i]);
@@ -133,6 +121,27 @@ void MenuInventory::alignElements() {
 	for (int i = 0; i < MAX_CARRIED; i++) {
 		tablist.add(inventory[CARRIED].slots[i]);
 	}
+
+	align();
+}
+
+void MenuInventory::align() {
+	Menu::align();
+
+	for (int i=0; i<MAX_EQUIPPED; i++) {
+		equipped_area[i].x = equipped_pos[i].x + window_area.x;
+		equipped_area[i].y = equipped_pos[i].y + window_area.y;
+	}
+
+	carried_area.x = carried_pos.x + window_area.x;
+	carried_area.y = carried_pos.y + window_area.y;
+
+	inventory[EQUIPMENT].setPos(window_area.x, window_area.y);
+	inventory[CARRIED].setPos(window_area.x, window_area.y);
+
+	closeButton->setPos(window_area.x, window_area.y);
+
+	label_inventory.set(window_area.x+title.x, window_area.y+title.y, title.justify, title.valign, msg->get("Inventory"), color_normal, title.font_style);
 }
 
 void MenuInventory::logic() {
@@ -376,6 +385,11 @@ void MenuInventory::drop(Point position, ItemStack stack) {
 				inventory[area][slot] = stack;
 				updateEquipment(slot);
 			}
+
+			// if this item has a power, place it on the action bar if possible
+			if (items->items[stack.item].power > 0) {
+				menu_act->addPower(items->items[stack.item].power, 0);
+			}
 		}
 		else {
 			// equippable items only belong to one slot, for the moment
@@ -429,6 +443,13 @@ void MenuInventory::drop(Point position, ItemStack stack) {
 			) { // The whole equipped stack is dropped on an empty carried slot or on a wearable item
 				// Swap the two stacks
 				itemReturn(inventory[area][slot]);
+				updateEquipment(drag_prev_slot);
+
+				// if this item has a power, place it on the action bar if possible
+				if (items->items[inventory[EQUIPMENT][drag_prev_slot].item].power > 0) {
+					menu_act->addPower(items->items[inventory[EQUIPMENT][drag_prev_slot].item].power, 0);
+				}
+
 				inventory[area][slot] = stack;
 			}
 			else {
@@ -541,9 +562,14 @@ void MenuInventory::activate(Point position) {
 				}
 				updateEquipment( equip_slot);
 				items->playSound(inventory[EQUIPMENT][equip_slot].item);
+
+				// if this item has a power, place it on the action bar if possible
+				if (items->items[stack.item].power > 0) {
+					menu_act->addPower(items->items[stack.item].power, 0);
+				}
 			}
 		}
-		else logError("MenuInventory: Can't find equip slot, corresponding to type %s\n", items->items[inventory[CARRIED][slot].item].type.c_str());
+		else logError("MenuInventory: Can't find equip slot, corresponding to type %s", items->items[inventory[CARRIED][slot].item].type.c_str());
 	}
 
 	drag_prev_src = -1;
@@ -592,6 +618,11 @@ void MenuInventory::add(ItemStack stack, int area, int slot, bool play_sound) {
 			if (!leftover.empty()) {
 				add(leftover, CARRIED, -1, false);
 			}
+		}
+
+		// if this item has a power, place it on the action bar if possible
+		if (items->items[stack.item].type == "consumable" && items->items[stack.item].power > 0) {
+			menu_act->addPower(items->items[stack.item].power, 0);
 		}
 	}
 	drag_prev_src = -1;
@@ -739,7 +770,7 @@ void MenuInventory::updateEquipment(int slot) {
  */
 void MenuInventory::applyEquipment(ItemStack *equipped) {
 
-	const vector<Item> &pc_items = items->items;
+	const std::vector<Item> &pc_items = items->items;
 	int item_id;
 
 	// calculate bonuses to basic stats, added by items
@@ -771,15 +802,15 @@ void MenuInventory::applyEquipment(ItemStack *equipped) {
 		}
 
 		// calculate bonuses. added by item sets
-		vector<int> set;
-		vector<int> quantity;
-		vector<int>::iterator it;
+		std::vector<int> set;
+		std::vector<int> quantity;
+		std::vector<int>::iterator it;
 
 		for (int i=0; i<MAX_EQUIPPED; i++) {
 			item_id = equipped[i].item;
-			it = find(set.begin(), set.end(), items->items[item_id].set);
+			it = std::find(set.begin(), set.end(), items->items[item_id].set);
 			if (items->items[item_id].set > 0 && it != set.end()) {
-				quantity[distance(set.begin(), it)] += 1;
+				quantity[std::distance(set.begin(), it)] += 1;
 			}
 			else if (items->items[item_id].set > 0) {
 				set.push_back(items->items[item_id].set);
@@ -858,7 +889,7 @@ void MenuInventory::applyEquipment(ItemStack *equipped) {
 }
 
 void MenuInventory::applyItemStats(ItemStack *equipped) {
-	const vector<Item> &pc_items = items->items;
+	const std::vector<Item> &pc_items = items->items;
 
 	// reset additional values
 	stats->dmg_melee_min_add = stats->dmg_melee_max_add = 0;
@@ -911,15 +942,15 @@ void MenuInventory::applyItemStats(ItemStack *equipped) {
 
 void MenuInventory::applyItemSetBonuses(ItemStack *equipped) {
 	// calculate bonuses. added by item sets
-	vector<int> set;
-	vector<int> quantity;
-	vector<int>::iterator it;
+	std::vector<int> set;
+	std::vector<int> quantity;
+	std::vector<int>::iterator it;
 
 	for (int i=0; i<MAX_EQUIPPED; i++) {
 		int item_id = equipped[i].item;
-		it = find(set.begin(), set.end(), items->items[item_id].set);
+		it = std::find(set.begin(), set.end(), items->items[item_id].set);
 		if (items->items[item_id].set > 0 && it != set.end()) {
-			quantity[distance(set.begin(), it)] += 1;
+			quantity[std::distance(set.begin(), it)] += 1;
 		}
 		else if (items->items[item_id].set > 0) {
 			set.push_back(items->items[item_id].set);

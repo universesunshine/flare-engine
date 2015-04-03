@@ -20,6 +20,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 GameState::GameState()
 	: hasMusic(false)
 	, reload_music(false)
+	, save_settings_on_exit(true)
 	, load_counter(0)
 	, requestedGameState(NULL)
 	, exitRequested(false) {
@@ -33,6 +34,17 @@ void GameState::logic() {
 }
 
 void GameState::render() {
+}
+
+void GameState::refreshWidgets() {
+}
+
+void GameState::setLoadingFrame() {
+	load_counter = 2;
+}
+
+bool GameState::isPaused() {
+	return false;
 }
 
 GameState::~GameState() {

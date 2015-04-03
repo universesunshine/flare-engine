@@ -26,8 +26,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include <cassert>
 
-using namespace std;
-
 EnemyGroupManager::EnemyGroupManager() {
 	parseEnemyFilesAndStore();
 }
@@ -64,7 +62,7 @@ void EnemyGroupManager::parseEnemyFilesAndStore() {
 			}
 			else if (infile.key == "categories") {
 				// @ATTR categories|string,...|Comma separated list of enemy categories
-				string cat;
+				std::string cat;
 				while ( (cat = infile.nextValue()) != "") {
 					_categories[cat].push_back(new_enemy);
 				}
@@ -75,18 +73,18 @@ void EnemyGroupManager::parseEnemyFilesAndStore() {
 }
 
 Enemy_Level EnemyGroupManager::getRandomEnemy(const std::string& category, int minlevel, int maxlevel) const {
-	vector<Enemy_Level> enemyCategory;
-	std::map<string, vector<Enemy_Level> >::const_iterator it = _categories.find(category);
+	std::vector<Enemy_Level> enemyCategory;
+	std::map<std::string, std::vector<Enemy_Level> >::const_iterator it = _categories.find(category);
 	if (it != _categories.end()) {
 		enemyCategory = it->second;
 	}
 	else {
-		logError("EnemyGroupManager: Could not find enemy category %s, returning empty enemy\n", category.c_str());
+		logError("EnemyGroupManager: Could not find enemy category %s, returning empty enemy", category.c_str());
 		return Enemy_Level();
 	}
 
 	// load only the data that fit the criteria
-	vector<Enemy_Level> enemyCandidates;
+	std::vector<Enemy_Level> enemyCandidates;
 	for (size_t i = 0; i < enemyCategory.size(); ++i) {
 		Enemy_Level new_enemy = enemyCategory[i];
 		if ((new_enemy.level >= minlevel && new_enemy.level <= maxlevel) || (minlevel == 0 && maxlevel == 0)) {
@@ -103,7 +101,7 @@ Enemy_Level EnemyGroupManager::getRandomEnemy(const std::string& category, int m
 				add_times = 1;
 			}
 			else {
-				logError("EnemyGroupManager: 'rarity' property for enemy '%s' not valid (common|uncommon|rare): %s\n",
+				logError("EnemyGroupManager: 'rarity' property for enemy '%s' not valid (common|uncommon|rare): %s",
 						new_enemy.type.c_str(), new_enemy.rarity.c_str());
 			}
 
@@ -115,7 +113,7 @@ Enemy_Level EnemyGroupManager::getRandomEnemy(const std::string& category, int m
 	}
 
 	if (enemyCandidates.empty()) {
-		logError("EnemyGroupManager: Could not find a suitable enemy category for (%s, %d, %d)\n", category.c_str(), minlevel, maxlevel);
+		logError("EnemyGroupManager: Could not find a suitable enemy category for (%s, %d, %d)", category.c_str(), minlevel, maxlevel);
 		return Enemy_Level();
 	}
 	else {

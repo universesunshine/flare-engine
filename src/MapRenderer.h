@@ -62,7 +62,7 @@ private:
 
 	void drawRenderable(std::vector<Renderable>::iterator r_cursor);
 
-	void renderIsoLayer(const unsigned short layerdata[][256]);
+	void renderIsoLayer(const Map_Layer& layerdata);
 
 	// renders only objects
 	void renderIsoBackObjects(std::vector<Renderable> &r);
@@ -71,7 +71,7 @@ private:
 	void renderIsoFrontObjects(std::vector<Renderable> &r);
 	void renderIso(std::vector<Renderable> &r, std::vector<Renderable> &r_dead);
 
-	void renderOrthoLayer(const unsigned short layerdata[][256]);
+	void renderOrthoLayer(const Map_Layer& layerdata);
 	void renderOrthoBackObjects(std::vector<Renderable> &r);
 	void renderOrthoFrontObjects(std::vector<Renderable> &r);
 	void renderOrtho(std::vector<Renderable> &r, std::vector<Renderable> &r_dead);
@@ -82,6 +82,8 @@ private:
 
 	FPoint shakycam;
 	TileSet tset;
+
+	int npc_tooltip_margin;
 
 public:
 	// functions
@@ -104,6 +106,8 @@ public:
 
 	// some events can trigger powers
 	void activatePower(int power_index, unsigned statblock_index, FPoint &target);
+
+	bool isValidTile(const unsigned &tile);
 
 	// cam(x,y) is where on the map the camera is pointing
 	FPoint cam;
@@ -149,6 +153,9 @@ public:
 
 	// map soundids
 	std::vector<SoundManager::SoundID> sids;
+
+	// npc handling
+	int npc_id;
 
 	void loadMusic();
 

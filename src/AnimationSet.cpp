@@ -29,8 +29,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include <cassert>
 
-using namespace std;
-
 Animation *AnimationSet::getAnimation(const std::string &_name) {
 	if (!loaded)
 		load();
@@ -74,18 +72,18 @@ void AnimationSet::load() {
 	if (!parser.open(name, true, "Error loading animation definition: " + name))
 		return;
 
-	string _name = "";
+	std::string _name = "";
 	int position = 0;
 	int frames = 0;
 	int duration = 0;
 	Point render_size;
 	Point render_offset;
-	string type = "";
-	string starting_animation = "";
+	std::string type = "";
+	std::string starting_animation = "";
 	bool first_section=true;
 	bool compressed_loading=false; // is reset every section to false, set by frame keyword
 	Animation *newanim = NULL;
-	vector<short> active_frames;
+	std::vector<short> active_frames;
 
 	int parent_anim_frames = 0;
 
@@ -125,13 +123,17 @@ void AnimationSet::load() {
 		else if (parser.key == "frames") {
 			// @ATTR frames|integer|The total number of frames
 			frames = toInt(parser.val);
+			if (frames < 0) {
+				parser.error("AnimationSet: Frame count can not be negative.");
+				frames = 0;
+			}
 			if (parent && frames != parent_anim_frames) {
 				parser.error("AnimationSet: Frame count %d != %d for matching animation in %s", frames, parent_anim_frames, parent->getName().c_str());
 				frames = parent_anim_frames;
 			}
 		}
 		else if (parser.key == "duration") {
-			// @ATTR duration|integer|The duration of each frame.
+			// @ATTR duration|integer|The duration of the entire animation in 'ms' or 's'.
 			duration = parse_duration(parser.val);
 		}
 		else if (parser.key == "type")
@@ -150,7 +152,7 @@ void AnimationSet::load() {
 		else if (parser.key == "active_frame") {
 			// @ATTR active_frame|[all:frame (integer), ...]|A list of frames marked as "active". Also, "all" can be used to mark all frames as active.
 			active_frames.clear();
-			string nv = parser.nextValue();
+			std::string nv = parser.nextValue();
 			if (nv == "all") {
 				active_frames.push_back(-1);
 			}
@@ -159,8 +161,8 @@ void AnimationSet::load() {
 					active_frames.push_back(toInt(nv));
 					nv = parser.nextValue();
 				}
-				sort(active_frames.begin(), active_frames.end());
-				active_frames.erase(unique(active_frames.begin(), active_frames.end()), active_frames.end());
+				std::sort(active_frames.begin(), active_frames.end());
+				active_frames.erase(std::unique(active_frames.begin(), active_frames.end()), active_frames.end());
 			}
 		}
 		else if (parser.key == "frame") {

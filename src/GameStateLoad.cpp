@@ -34,9 +34,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "UtilsFileSystem.h"
 #include "UtilsParsing.h"
 
-using namespace std;
-
-
 GameStateLoad::GameStateLoad() : GameState()
 	, background(NULL)
 	, selection(NULL)
@@ -67,17 +64,16 @@ GameStateLoad::GameStateLoad() : GameState()
 
 	// Confirmation box to confirm deleting
 	confirm = new MenuConfirm(msg->get("Delete Save"), msg->get("Delete this save?"));
-	button_exit = new WidgetButton("images/menus/buttons/button_default.png");
+	button_exit = new WidgetButton();
 	button_exit->label = msg->get("Exit to Title");
-	button_exit->pos.x = VIEW_W_HALF - button_exit->pos.w/2;
-	button_exit->pos.y = VIEW_H - button_exit->pos.h;
+	button_exit->setBasePos(0, 0, ALIGN_BOTTOM);
 	button_exit->refresh();
 
-	button_action = new WidgetButton("images/menus/buttons/button_default.png");
+	button_action = new WidgetButton();
 	button_action->label = msg->get("Choose a Slot");
 	button_action->enabled = false;
 
-	button_alternate = new WidgetButton("images/menus/buttons/button_default.png");
+	button_alternate = new WidgetButton();
 	button_alternate->label = msg->get("Delete Save");
 	button_alternate->enabled = false;
 
@@ -93,19 +89,19 @@ GameStateLoad::GameStateLoad() : GameState()
 		while (infile.next()) {
 			// @ATTR action_button|x (integer), y (integer)|Position of the "New Game"/"Load Game" button.
 			if (infile.key == "action_button") {
-				button_action->pos.x = popFirstInt(infile.val);
-				button_action->pos.y = popFirstInt(infile.val);
+				int x = popFirstInt(infile.val);
+				int y = popFirstInt(infile.val);
+				button_action->setBasePos(x, y);
 			}
 			// @ATTR alternate_button|x (integer), y (integer)|Position of the "Delete Save" button.
 			else if (infile.key == "alternate_button") {
-				button_alternate->pos.x = popFirstInt(infile.val);
-				button_alternate->pos.y = popFirstInt(infile.val);
+				int x = popFirstInt(infile.val);
+				int y = popFirstInt(infile.val);
+				button_alternate->setBasePos(x, y);
 			}
 			// @ATTR portrait|x (integer), y (integer), w (integer), h (integer)|Position and dimensions of the portrait image.
 			else if (infile.key == "portrait") {
 				portrait_dest = toRect(infile.val);
-				portrait_dest.x += (VIEW_W - FRAME_W) / 2;
-				portrait_dest.y += (VIEW_H - FRAME_H) / 2;
 			}
 			// @ATTR gameslot|x (integer), y (integer), w (integer), h (integer)|Position and dimensions of the first game slot.
 			else if (infile.key == "gameslot") {
@@ -151,7 +147,7 @@ GameStateLoad::GameStateLoad() : GameState()
 				if (dir != 6) continue;
 				else found_layer = true;
 
-				string layer = popFirstString(infile.val);
+				std::string layer = popFirstString(infile.val);
 				while (layer != "") {
 					preview_layer.push_back(layer);
 					layer = popFirstString(infile.val);
@@ -160,14 +156,10 @@ GameStateLoad::GameStateLoad() : GameState()
 		}
 		infile.close();
 	}
-	if (!found_layer) logError("GameStateLoad: Could not find layers for direction 6\n");
+	if (!found_layer) logError("GameStateLoad: Could not find layers for direction 6");
 
-	button_action->pos.x += (VIEW_W - FRAME_W)/2;
-	button_action->pos.y += (VIEW_H - FRAME_H)/2;
 	button_action->refresh();
 
-	button_alternate->pos.x += (VIEW_W - FRAME_W)/2;
-	button_alternate->pos.y += (VIEW_H - FRAME_H)/2;
 	button_alternate->refresh();
 
 	for (int i=0; i<GAME_SLOT_MAX; i++) {
@@ -211,10 +203,12 @@ GameStateLoad::GameStateLoad() : GameState()
 		infile.close();
 	}
 
-	stance_frames = max(1, stance_frames);
-	stance_ticks_per_frame = max(1, (stance_duration / stance_frames));
+	stance_frames = std::max(1, stance_frames);
+	stance_ticks_per_frame = std::max(1, (stance_duration / stance_frames));
 
 	color_normal = font->getColor("menu_normal");
+
+	refreshWidgets();
 }
 
 void GameStateLoad::loadGraphics() {
@@ -257,8 +251,6 @@ void GameStateLoad::loadPortrait(int slot) {
 	graphics = render_device->loadImage(stats[slot].gfx_portrait);
 	if (graphics) {
 		portrait = graphics->createSprite();
-		portrait->setDestX(portrait_dest.x);
-		portrait->setDestY(portrait_dest.y);
 		portrait->setClipW(portrait_dest.w);
 		portrait->setClipH(portrait_dest.h);
 		graphics->unref();
@@ -272,10 +264,10 @@ void GameStateLoad::readGameSlots() {
 	}
 }
 
-string GameStateLoad::getMapName(const string& map_filename) {
+std::string GameStateLoad::getMapName(const std::string& map_filename) {
 	FileParser infile;
 	if (!infile.open(map_filename, true, "")) return "";
-	string map_name = "";
+	std::string map_name = "";
 
 	while (map_name == "" && infile.next()) {
 		if (infile.key == "title")
@@ -288,17 +280,14 @@ string GameStateLoad::getMapName(const string& map_filename) {
 
 void GameStateLoad::readGameSlot(int slot) {
 
-	stringstream filename;
+	std::stringstream filename;
 	FileParser infile;
 
 	// abort if not a valid slot number
 	if (slot < 0 || slot >= GAME_SLOT_MAX) return;
 
-	// save slots are named save#.txt
-	filename << PATH_USER;
-	if (SAVE_PREFIX.length() > 0)
-		filename << SAVE_PREFIX << "_";
-	filename << "save" << (slot+1) << ".txt";
+	// save data is stored in slot#/avatar.txt
+	filename << PATH_USER << "saves/" << SAVE_PREFIX << "/" << (slot+1) << "/avatar.txt";
 
 	if (!infile.open(filename.str(),false, "")) return;
 
@@ -320,7 +309,7 @@ void GameStateLoad::readGameSlot(int slot) {
 			stats[slot].defense_character = toInt(infile.nextValue());
 		}
 		else if (infile.key == "equipped") {
-			string repeat_val = infile.nextValue();
+			std::string repeat_val = infile.nextValue();
 			while (repeat_val != "") {
 				equipped[slot].push_back(toInt(repeat_val));
 				repeat_val = infile.nextValue();
@@ -348,7 +337,7 @@ void GameStateLoad::readGameSlot(int slot) {
 void GameStateLoad::loadPreview(int slot) {
 
 	Image *graphics;
-	vector<string> img_gfx;
+	std::vector<std::string> img_gfx;
 
 	for (unsigned int i=0; i<sprites[slot].size(); i++) {
 		if (sprites[slot][i])
@@ -372,12 +361,12 @@ void GameStateLoad::loadPreview(int slot) {
 
 	for (unsigned int i=0; i<equipped[slot].size(); i++) {
 		if ((unsigned)equipped[slot][i] > items->items.size()-1) {
-			logError("GameStateLoad: Item in save slot %d with id=%d is out of bounds 1-%d. Your savegame is broken or you might be using an incompatible savegame/mod\n", slot+1, equipped[slot][i], (int)items->items.size()-1);
+			logError("GameStateLoad: Item in save slot %d with id=%d is out of bounds 1-%d. Your savegame is broken or you might be using an incompatible savegame/mod", slot+1, equipped[slot][i], (int)items->items.size()-1);
 			continue;
 		}
 
 		if (equipped[slot][i] > 0 && !preview_layer.empty()) {
-			vector<string>::iterator found = find(preview_layer.begin(), preview_layer.end(), items->items[equipped[slot][i]].type);
+			std::vector<std::string>::iterator found = find(preview_layer.begin(), preview_layer.end(), items->items[equipped[slot][i]].type);
 			if (found != preview_layer.end())
 				img_gfx[distance(preview_layer.begin(), found)] = items->items[equipped[slot][i]].gfx;
 		}
@@ -404,6 +393,9 @@ void GameStateLoad::loadPreview(int slot) {
 
 
 void GameStateLoad::logic() {
+
+	if (inpt->window_resized)
+		refreshWidgets();
 
 	// animate the avatar preview images
 	if (stance_type == PLAY_ONCE && frame_ticker < stance_duration) {
@@ -484,27 +476,7 @@ void GameStateLoad::logic() {
 	else if (confirm->visible) {
 		confirm->logic();
 		if (confirm->confirmClicked) {
-			stringstream filename;
-			filename.str("");
-			filename << PATH_USER;
-			if (SAVE_PREFIX.length() > 0)
-				filename << SAVE_PREFIX << "_";
-			filename << "save" << (selected_slot+1) << ".txt";
-
-			if (remove(filename.str().c_str()) != 0)
-				logError("GameStateLoad: Error deleting save from path");
-
-			if (stats[selected_slot].permadeath) {
-				// Remove stash
-				stringstream ss;
-				ss.str("");
-				ss << PATH_USER;
-				if (SAVE_PREFIX.length() > 0)
-					ss << SAVE_PREFIX << "_";
-				ss << "stash_HC" << (selected_slot+1) << ".txt";
-				if (remove(ss.str().c_str()) != 0)
-					logError("GameStateLoad: Error deleting hardcore stash in slot %d\n", selected_slot+1);
-			}
+			removeSaveDir(selected_slot+1);
 
 			stats[selected_slot] = StatBlock();
 			readGameSlot(selected_slot);
@@ -519,6 +491,7 @@ void GameStateLoad::logic() {
 
 void GameStateLoad::logicLoading() {
 	// load an existing game
+	inpt->lock_all = true;
 	delete_items = false;
 	GameStatePlay* play = new GameStatePlay();
 	play->resetGame();
@@ -564,6 +537,29 @@ void GameStateLoad::updateButtons() {
 	}
 	button_action->refresh();
 	button_alternate->refresh();
+
+	refreshWidgets();
+}
+
+void GameStateLoad::refreshWidgets() {
+	button_exit->setPos();
+	button_action->setPos((VIEW_W-FRAME_W)/2, (VIEW_H-FRAME_H)/2);
+	button_alternate->setPos((VIEW_W-FRAME_W)/2, (VIEW_H-FRAME_H)/2);
+
+	label_loading->setPos();
+
+	if (portrait) {
+		portrait->setDestX(portrait_dest.x + ((VIEW_W-FRAME_W)/2));
+		portrait->setDestY(portrait_dest.y + ((VIEW_H-FRAME_H)/2));
+	}
+	for (int i=0; i<GAME_SLOT_MAX; i++) {
+		slot_pos[i].x = gameslot_pos.x + (VIEW_W - FRAME_W)/2;
+		slot_pos[i].h = gameslot_pos.h;
+		slot_pos[i].y = gameslot_pos.y + (VIEW_H - FRAME_H)/2 + (i * gameslot_pos.h);
+		slot_pos[i].w = gameslot_pos.w;
+	}
+
+	confirm->align();
 }
 
 void GameStateLoad::render() {
@@ -602,7 +598,7 @@ void GameStateLoad::render() {
 	}
 
 	Point label;
-	stringstream ss;
+	std::stringstream ss;
 
 	if (loading_requested || loading || loaded) {
 		label.x = loading_pos.x + (VIEW_W - FRAME_W)/2;

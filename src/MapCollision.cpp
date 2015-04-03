@@ -32,20 +32,29 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include <cassert>
 #include <cstring>
 
-using namespace std;
-
 MapCollision::MapCollision()
-	: map_size(Point()) {
-	memset(colmap, 0, sizeof(colmap));
+	: map_size(Point())
+{
+	colmap.resize(1);
+	colmap[0].resize(1);
 }
 
-void MapCollision::setmap(const unsigned short _colmap[][256], unsigned short w, unsigned short h) {
-	for (int i=0; i<w; i++)
-		for (int j=0; j<h; j++)
+void MapCollision::setmap(const Map_Layer& _colmap, unsigned short w, unsigned short h) {
+	clearmap();
+
+	colmap.resize(w);
+	for (unsigned i=0; i<w; ++i) {
+		colmap[i].resize(h);
+	}
+	for (unsigned i=0; i<w; i++)
+		for (unsigned j=0; j<h; j++)
 			colmap[i][j] = _colmap[i][j];
 
 	map_size.x = w;
 	map_size.y = h;
+}
+
+void MapCollision::clearmap() {
 }
 
 int sgn(float f) {
@@ -94,12 +103,12 @@ bool MapCollision::small_step_forced_slide(float &x, float &y, float step_x, flo
 		if (is_valid_tile(int(x), int(y) + 1, movement_type, is_hero)
 				&& is_valid_tile(int(x) + sgn(step_x), int(y) + 1, movement_type, is_hero)
 				&& dy > 0.5) {
-			y += min(1 - dy + epsilon, float(fabs(step_x)));
+			y += std::min(1 - dy + epsilon, float(fabs(step_x)));
 		}
 		else if (is_valid_tile(int(x), int(y) - 1, movement_type, is_hero)
 				 && is_valid_tile(int(x) + sgn(step_x), int(y) - 1, movement_type, is_hero)
 				 && dy < 0.5) {
-			y -= min(dy + epsilon, float(fabs(step_x)));
+			y -= std::min(dy + epsilon, float(fabs(step_x)));
 		}
 		else {
 			return false;
@@ -113,12 +122,12 @@ bool MapCollision::small_step_forced_slide(float &x, float &y, float step_x, flo
 		if (is_valid_tile(int(x) + 1, int(y), movement_type, is_hero)
 				&& is_valid_tile(int(x) + 1, int(y) + sgn(step_y), movement_type, is_hero)
 				&& dx > 0.5) {
-			x += min(1 - dx + epsilon, float(fabs(step_y)));
+			x += std::min(1 - dx + epsilon, float(fabs(step_y)));
 		}
 		else if (is_valid_tile(int(x) - 1, int(y), movement_type, is_hero)
 				 && is_valid_tile(int(x) - 1, int(y) + sgn(step_y), movement_type, is_hero)
 				 && dx < 0.5) {
-			x -= min(dx + epsilon, float(fabs(step_y)));
+			x -= std::min(dx + epsilon, float(fabs(step_y)));
 		}
 		else {
 			return false;
@@ -146,23 +155,23 @@ bool MapCollision::move(float &x, float &y, float _step_x, float _step_y, MOVEME
 		float step_x = 0;
 		if (_step_x > 0) {
 			// find next interesting value, which is either the whole step, or the transition to the next tile
-			step_x = min((float)ceil(x) - x, _step_x);
+			step_x = std::min((float)ceil(x) - x, _step_x);
 			// if we are standing on the edge of a tile (ceil(x) - x == 0), we need to look one tile ahead
-			if (step_x <= MIN_TILE_GAP) step_x = min(1.f, _step_x);
+			if (step_x <= MIN_TILE_GAP) step_x = std::min(1.f, _step_x);
 		}
 		else if (_step_x < 0) {
-			step_x = max((float)floor(x) - x, _step_x);
-			if (step_x == 0) step_x = max(-1.f, _step_x);
+			step_x = std::max((float)floor(x) - x, _step_x);
+			if (step_x == 0) step_x = std::max(-1.f, _step_x);
 		}
 
 		float step_y = 0;
 		if (_step_y > 0) {
-			step_y = min((float)ceil(y) - y, _step_y);
-			if (step_y <= MIN_TILE_GAP) step_y = min(1.f, _step_y);
+			step_y = std::min((float)ceil(y) - y, _step_y);
+			if (step_y <= MIN_TILE_GAP) step_y = std::min(1.f, _step_y);
 		}
 		else if (_step_y < 0) {
-			step_y = max((float)floor(y) - y, _step_y);
-			if (step_y == 0) step_y	= max(-1.f, _step_y);
+			step_y = std::max((float)floor(y) - y, _step_y);
+			if (step_y == 0) step_y	= std::max(-1.f, _step_y);
 		}
 
 		_step_x -= step_x;
@@ -212,7 +221,6 @@ bool MapCollision::is_empty(const float& x, const float& y) const {
  * A position outside the map boundary is a wall
  */
 bool MapCollision::is_wall(const float& x, const float& y) const {
-
 	// bounds check
 	const int tile_x = int(x);
 	const int tile_y = int(y);
@@ -226,7 +234,6 @@ bool MapCollision::is_wall(const float& x, const float& y) const {
  * Is this a valid tile for an entity with this movement type?
  */
 bool MapCollision::is_valid_tile(const int& tile_x, const int& tile_y, MOVEMENTTYPE movement_type, bool is_hero) const {
-
 	// outside the map isn't valid
 	if (is_outside_map(tile_x,tile_y)) return false;
 
@@ -257,6 +264,8 @@ bool MapCollision::is_valid_tile(const int& tile_x, const int& tile_y, MOVEMENTT
  * Is this a valid position for an entity with this movement type?
  */
 bool MapCollision::is_valid_position(const float& x, const float& y, MOVEMENTTYPE movement_type, bool is_hero) const {
+	if (x < 0 || y < 0) return false;
+
 	return is_valid_tile(int(x), int(y), movement_type, is_hero);
 }
 
@@ -271,7 +280,7 @@ bool MapCollision::line_check(const float& x1, const float& y1, const float& x2,
 	float dy = fabs(y2 - y1);
 	float step_x;
 	float step_y;
-	int steps = (int)max(dx, dy);
+	int steps = (int)std::max(dx, dy);
 
 
 	if (dx > dy) {
@@ -312,7 +321,6 @@ bool MapCollision::line_of_sight(const float& x1, const float& y1, const float& 
 }
 
 bool MapCollision::line_of_movement(const float& x1, const float& y1, const float& x2, const float& y2, MOVEMENTTYPE movement_type) {
-
 	if (is_outside_map(x2, y2)) return false;
 
 	// intangible entities can always move
@@ -369,12 +377,12 @@ bool MapCollision::is_facing(const float& x1, const float& y1, char direction, c
 * limit is the maximum number of explored node
 * @return true if a path is found
 */
-bool MapCollision::compute_path(FPoint start_pos, FPoint end_pos, vector<FPoint> &path, MOVEMENTTYPE movement_type, unsigned int limit) {
+bool MapCollision::compute_path(FPoint start_pos, FPoint end_pos, std::vector<FPoint> &path, MOVEMENTTYPE movement_type, unsigned int limit) {
 
 	if (is_outside_map(end_pos.x, end_pos.y)) return false;
 
 	if (limit == 0)
-		limit = 256;
+		limit = std::max(map_size.x, map_size.y);
 
 	// path must be empty
 	if (!path.empty())
@@ -398,8 +406,8 @@ bool MapCollision::compute_path(FPoint start_pos, FPoint end_pos, vector<FPoint>
 	node->setEstimatedCost((float)calcDist(start,end));
 	node->setParent(current);
 
-	AStarContainer open(map_size.x, limit);
-	AStarCloseContainer close(map_size.x, limit);
+	AStarContainer open(map_size.x, map_size.y, limit);
+	AStarCloseContainer close(map_size.x, map_size.y, limit);
 
 	open.add(node);
 
@@ -415,11 +423,16 @@ bool MapCollision::compute_path(FPoint start_pos, FPoint end_pos, vector<FPoint>
 			break; //path found !
 
 		//limit evaluated nodes to the size of the map
-		list<Point> neighbours = node->getNeighbours(map_size.x, map_size.y);
+		std::list<Point> neighbours = node->getNeighbours(map_size.x, map_size.y);
 
 		// for every neighbour of current node
-		for (list<Point>::iterator it=neighbours.begin(); it != neighbours.end(); ++it)	{
+		for (std::list<Point>::iterator it=neighbours.begin(); it != neighbours.end(); ++it)	{
 			Point neighbour = *it;
+
+			// do not exceed the node limit when adding nodes
+			if ((unsigned)open.getSize() >= limit) {
+				break;
+			}
 
 			// if neighbour is not free of any collision, skip it
 			if (!is_valid_tile(neighbour.x,neighbour.y,movement_type, false))
@@ -475,7 +488,6 @@ bool MapCollision::compute_path(FPoint start_pos, FPoint end_pos, vector<FPoint>
 }
 
 void MapCollision::block(const float& map_x, const float& map_y, bool is_ally) {
-
 	const int tile_x = int(map_x);
 	const int tile_y = int(map_y);
 
@@ -489,7 +501,6 @@ void MapCollision::block(const float& map_x, const float& map_y, bool is_ally) {
 }
 
 void MapCollision::unblock(const float& map_x, const float& map_y) {
-
 	const int tile_x = int(map_x);
 	const int tile_y = int(map_y);
 
@@ -524,5 +535,6 @@ FPoint MapCollision::get_random_neighbor(Point target, int range, bool ignore_bl
 }
 
 MapCollision::~MapCollision() {
+	clearmap();
 }
 

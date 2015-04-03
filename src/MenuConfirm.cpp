@@ -24,10 +24,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "Settings.h"
 #include "SharedResources.h"
 
-using namespace std;
-
-
-MenuConfirm::MenuConfirm(const string& _buttonMsg, const string& _boxMsg)
+MenuConfirm::MenuConfirm(const std::string& _buttonMsg, const std::string& _boxMsg)
 	: Menu()
 	, buttonConfirm(NULL)
 	, buttonClose(NULL)
@@ -51,7 +48,7 @@ MenuConfirm::MenuConfirm(const string& _buttonMsg, const string& _boxMsg)
 	boxMsg = _boxMsg;
 
 	if (hasConfirmButton) {
-		buttonConfirm = new WidgetButton("images/menus/buttons/button_default.png");
+		buttonConfirm = new WidgetButton();
 		buttonConfirm->label = _buttonMsg;
 		tablist.add(buttonConfirm);
 	}
@@ -61,10 +58,11 @@ MenuConfirm::MenuConfirm(const string& _buttonMsg, const string& _boxMsg)
 
 	setBackground("images/menus/confirm_bg.png");
 	align();
-	alignElements();
 }
 
-void MenuConfirm::alignElements() {
+void MenuConfirm::align() {
+	Menu::align();
+
 	if (hasConfirmButton) {
 		buttonConfirm->pos.x = window_area.x + window_area.w/2 - buttonConfirm->pos.w/2;
 		buttonConfirm->pos.y = window_area.y + window_area.h/2;

@@ -32,8 +32,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "StatBlock.h"
 #include "UtilsParsing.h"
 
-using namespace std;
-
 CampaignManager::CampaignManager()
 	: status()
 	, log_msg("")
@@ -53,8 +51,8 @@ void CampaignManager::clearAll() {
  * Take the savefile campaign= and convert to status array
  */
 void CampaignManager::setAll(std::string s) {
-	string str = s + ',';
-	string token;
+	std::string str = s + ',';
+	std::string token;
 	while (str != "") {
 		token = popFirstString(str, ',');
 		if (token != "") this->setStatus(token);
@@ -66,7 +64,7 @@ void CampaignManager::setAll(std::string s) {
  * Convert status array to savefile campaign= (status csv)
  */
 std::string CampaignManager::getAll() {
-	stringstream ss;
+	std::stringstream ss;
 	ss.str("");
 	for (unsigned int i=0; i < status.size(); i++) {
 		ss << status[i];
@@ -104,7 +102,7 @@ void CampaignManager::unsetStatus(std::string s) {
 	// avoid searching empty statuses
 	if (s == "") return;
 
-	vector<string>::iterator it;
+	std::vector<std::string>::iterator it;
 	// see http://stackoverflow.com/a/223405
 	for (it = status.end(); it != status.begin();) {
 		--it;
@@ -140,6 +138,8 @@ void CampaignManager::removeItem(int item_id) {
 }
 
 void CampaignManager::rewardItem(ItemStack istack) {
+	if (istack.empty())
+		return;
 
 	if (carried_items->full(istack.item)) {
 		drop_stack.push(istack);
@@ -155,6 +155,12 @@ void CampaignManager::rewardItem(ItemStack istack) {
 
 			items->playSound(istack.item);
 		}
+
+		// if this item has a power, place it on the action bar if possible
+		if (items->items[istack.item].type == "consumable" && items->items[istack.item].power > 0) {
+			menu_act->addPower(items->items[istack.item].power, 0);
+		}
+
 	}
 }
 
@@ -170,7 +176,7 @@ void CampaignManager::rewardCurrency(int amount) {
 
 void CampaignManager::rewardXP(int amount, bool show_message) {
 	bonus_xp += (amount * (100.0f + hero->get(STAT_XP_GAIN))) / 100.0f;
-	hero->xp += (int)bonus_xp;
+	hero->addXP((int)bonus_xp);
 	bonus_xp -= (int)bonus_xp;
 	hero->refresh_stats = true;
 	if (show_message) addMsg(msg->get("You receive %d XP.", amount));
@@ -202,7 +208,7 @@ void CampaignManager::restoreHPMP(std::string s) {
 	}
 }
 
-void CampaignManager::addMsg(const string& new_msg) {
+void CampaignManager::addMsg(const std::string& new_msg) {
 	if (log_msg != "") log_msg += " ";
 	log_msg += new_msg;
 }
