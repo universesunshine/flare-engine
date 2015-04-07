@@ -236,6 +236,9 @@ void FontEngine::render(const std::string& text, int x, int y, int justify, Imag
 
 	// Render text graphics into target
 	clip = temp->getClip();
+
+	// FIXME: becomes very slow after window resize.
+	// Not sure if this is a real reason
 	render_device->renderToImage(temp->getGraphics(), clip,
 								 target, dest_rect, active_font->blend);
 
