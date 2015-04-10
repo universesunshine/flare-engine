@@ -28,6 +28,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "GameSwitcher.h"
 #include "SharedResources.h"
 #include "UtilsFileSystem.h"
+#include "SDLFontEngine.h"
 
 GameSwitcher *gswitch;
 
@@ -65,10 +66,10 @@ static void init(const std::string &render_device_name) {
 	}
 
 	msg = new MessageEngine();
-	font = new FontEngine();
+	font = getFontEngine();
 	anim = new AnimationManager();
 	comb = new CombatText();
-	inpt = new InputState();
+	inpt = getInputManager();
 	icons = NULL;
 
 	// Load tileset options (must be after ModManager is initialized)
@@ -100,7 +101,7 @@ static void init(const std::string &render_device_name) {
 		AUDIO = false;
 	}
 
-	snd = new SoundManager();
+	snd = getSoundManager();
 
 	// initialize Joysticks
 	if(SDL_NumJoysticks() == 1) {
@@ -130,7 +131,7 @@ static void init(const std::string &render_device_name) {
 	curs = new CursorManager();
 }
 
-static void mainLoop (bool debug_event) {
+static void mainLoop () {
 	bool done = false;
 	int delay = int(floor((1000.f/MAX_FRAMES_PER_SEC)+0.5f));
 	int logic_ticks = SDL_GetTicks();
@@ -151,7 +152,7 @@ static void mainLoop (bool debug_event) {
 			}
 
 			SDL_PumpEvents();
-			inpt->handle(debug_event);
+			inpt->handle();
 
 			// Skip game logic when minimized on Android
 			if (inpt->window_minimized && !inpt->window_restored)
@@ -295,7 +296,11 @@ int main(int argc, char *argv[]) {
 	if (!done) {
 		srand((unsigned int)time(NULL));
 		init(render_device_name);
-		mainLoop(debug_event);
+
+		if (debug_event)
+			inpt->enableEventLog();
+
+		mainLoop();
 
 		if (gswitch)
 			gswitch->saveUserSettings();

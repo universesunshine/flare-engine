@@ -26,6 +26,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "Settings.h"
 
 #include "OpenGLRenderDevice.h"
+#include "SDLFontEngine.h"
 
 using namespace std;
 
@@ -579,7 +580,7 @@ SDL_Surface* OpenGLRenderDevice::copyTextureToSurface(GLuint texture)
 }
 
 int OpenGLRenderDevice::renderText(
-	TTF_Font *ttf_font,
+	FontStyle *font_style,
 	const std::string& text,
 	Color color,
 	Rect& dest
@@ -590,7 +591,7 @@ int OpenGLRenderDevice::renderText(
 	return ret;
 }
 
-Image * OpenGLRenderDevice::renderTextToImage(TTF_Font* ttf_font, const std::string& text, Color color, bool blended) {
+Image * OpenGLRenderDevice::renderTextToImage(FontStyle* font_style, const std::string& text, Color color, bool blended) {
 	OpenGLImage *image = new OpenGLImage(this);
 	if (!image) return NULL;
 
@@ -598,9 +599,9 @@ Image * OpenGLRenderDevice::renderTextToImage(TTF_Font* ttf_font, const std::str
 
 	SDL_Surface* surface;
 	if (blended)
-		surface = TTF_RenderUTF8_Blended(ttf_font, text.c_str(), _color);
+		surface = TTF_RenderUTF8_Blended(static_cast<SDLFontStyle *>(font_style)->ttfont, text.c_str(), _color);
 	else
-		surface = TTF_RenderUTF8_Solid(ttf_font, text.c_str(), _color);
+		surface = TTF_RenderUTF8_Solid(static_cast<SDLFontStyle *>(font_style)->ttfont, text.c_str(), _color);
 
 	if (surface)
 	{

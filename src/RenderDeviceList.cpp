@@ -23,6 +23,10 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "SDLSoftwareRenderDevice.h"
 #include "SDLHardwareRenderDevice.h"
 #include "OpenGLRenderDevice.h"
+#include "SDLFontEngine.h"
+#include "SDLSoundManager.h"
+#include "SDLInputState.h"
+
 RenderDevice* getRenderDevice(std::string name) {
 #ifdef __ANDROID__
 	// Android always uses the hardware renderer
@@ -42,4 +46,16 @@ RenderDevice* getRenderDevice(std::string name) {
 		return new OpenGLRenderDevice();
 		//return new SDLSoftwareRenderDevice();
 	}
+}
+
+FontEngine* getFontEngine() {
+	return new SDLFontEngine();
+}
+
+SoundManager* getSoundManager() {
+	return new SDLSoundManager();
+}
+
+InputState* getInputManager() {
+	return new SDLInputState();
 }
