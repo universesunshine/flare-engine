@@ -21,7 +21,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "CampaignManager.h"
 #include "CommonIncludes.h"
 #include "EnemyGroupManager.h"
-#include "FileParser.h"
 #include "MapRenderer.h"
 #include "PowerManager.h"
 #include "SharedGameResources.h"
@@ -29,7 +28,6 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "StatBlock.h"
 #include "UtilsFileSystem.h"
 #include "UtilsMath.h"
-#include "UtilsParsing.h"
 #include "WidgetTooltip.h"
 
 #include <stdint.h>
@@ -38,12 +36,10 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 MapRenderer::MapRenderer()
 	: Map()
-	, music(NULL)
 	, tip(new WidgetTooltip())
 	, tip_pos()
 	, show_tooltip(false)
 	, shakycam()
-	, npc_tooltip_margin(0)
 	, cam()
 	, map_change(false)
 	, teleportation(false)
@@ -60,18 +56,6 @@ MapRenderer::MapRenderer()
 	, npc_id(-1)
 	, index_objectlayer(0)
 {
-	FileParser infile;
-	// load tooltip_margin from engine config file
-	// @CLASS Map|Description of engine/tooltips.txt
-	if (infile.open("engine/tooltips.txt")) {
-		while (infile.next()) {
-			if (infile.key == "npc_tooltip_margin") {
-				// @ATTR npc_tooltip_margin|integer|Vertical offset for NPC labels.
-				npc_tooltip_margin = toInt(infile.val);
-			}
-		}
-		infile.close();
-	}
 }
 
 void MapRenderer::clearQueues() {
@@ -123,8 +107,8 @@ void MapRenderer::pushEnemyGroup(Map_Group &g) {
 
 	while (enemies_to_spawn && allowed_misses) {
 
-		float x = (g.pos.x + (rand() % g.area.x)) + 0.5f;
-		float y = (g.pos.y + (rand() % g.area.y)) + 0.5f;
+		float x = (g.area.x == 0) ? (g.pos.x + 0.5f) : (g.pos.x + (rand() % g.area.x)) + 0.5f;
+		float y = (g.area.y == 0) ? (g.pos.y + 0.5f) : (g.pos.y + (rand() % g.area.y)) + 0.5f;
 
 		if (enemyGroupPlaceEnemy(x, y, g))
 			enemies_to_spawn--;
@@ -222,28 +206,8 @@ int MapRenderer::load(std::string fname) {
 }
 
 void MapRenderer::loadMusic() {
-
-	// keep playing if already the correct track
-	if (played_music_filename == music_filename)
-		return;
-
-	played_music_filename = music_filename;
-
-	if (music) {
-		Mix_HaltMusic();
-		Mix_FreeMusic(music);
-		music = NULL;
-	}
-	if (AUDIO && MUSIC_VOLUME) {
-		music = Mix_LoadMUS(mods->locate(played_music_filename).c_str());
-		if(!music)
-			logError("MapRenderer: Mix_LoadMUS: %s", Mix_GetError());
-	}
-
-	if (music) {
-		Mix_VolumeMusic(MUSIC_VOLUME);
-		Mix_PlayMusic(music, -1);
-	}
+	// load and play music
+	snd->loadMusic(music_filename);
 }
 
 void MapRenderer::logic() {
@@ -705,7 +669,7 @@ void MapRenderer::checkHotspots() {
 					if (isWithin(dest, inpt->mouse)) {
 						matched = true;
 						tip_pos.x = dest.x + dest.w/2;
-						tip_pos.y = p.y - npc_tooltip_margin;
+						tip_pos.y = p.y - TOOLTIP_MARGIN_NPC;
 					}
 				}
 				else {
@@ -804,7 +768,7 @@ void MapRenderer::checkNearestEvent() {
 			createTooltip((*nearest).getComponent("tooltip"));
 			tip_pos = map_to_screen((*nearest).center.x, (*nearest).center.y, shakycam.x, shakycam.y);
 			if ((*nearest).getComponent("npc_hotspot")) {
-				tip_pos.y -= npc_tooltip_margin;
+				tip_pos.y -= TOOLTIP_MARGIN_NPC;
 			}
 			else {
 				tip_pos.y -= TILE_H;
@@ -871,11 +835,6 @@ bool MapRenderer::isValidTile(const unsigned &tile) {
 }
 
 MapRenderer::~MapRenderer() {
-	if (music != NULL) {
-		Mix_HaltMusic();
-		Mix_FreeMusic(music);
-	}
-
 	tip_buf.clear();
 	clearLayers();
 	clearEvents();

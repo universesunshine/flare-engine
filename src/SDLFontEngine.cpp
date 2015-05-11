@@ -35,7 +35,7 @@ SDLFontEngine::SDLFontEngine() : FontEngine(), active_font(NULL) {
 	// Initiate SDL_ttf
 	if(!TTF_WasInit() && TTF_Init()==-1) {
 		logError("SDLFontEngine: TTF_Init: %s", TTF_GetError());
-		exit(2);
+		Exit(2);
 	}
 
 	// load the fonts
@@ -88,8 +88,7 @@ SDLFontEngine::SDLFontEngine() : FontEngine(), active_font(NULL) {
 	setFont("font_regular");
 	if (!active_font) {
 		logError("FontEngine: Unable to determine default font!");
-		SDL_Quit();
-		exit(1);
+		Exit(1);
 	}
 }
 
@@ -108,6 +107,52 @@ int SDLFontEngine::calc_width(const std::string& text) {
 	int w, h;
 	TTF_SizeUTF8(active_font->ttfont, text.c_str(), &w, &h);
 	return w;
+}
+
+/**
+ * Fit a string of text into a pixel width
+ * use_ellipsis determines how the returned string will appear
+ * Example with "Hello World" (let's assume a monospace font and a width that can fit 6 characters):
+ * use_ellipsis == true: "Hello ..."
+ * use_ellipsis == false: " World"
+ */
+std::string SDLFontEngine::trimTextToWidth(const std::string& text, const int& width, const bool& use_ellipsis) {
+	if (width >= calc_width(text))
+		return text;
+
+	unsigned text_length = text.length();
+	unsigned ret_length = text_length;
+	int total_width = (use_ellipsis ? width - calc_width("...") : width);
+
+	for (unsigned i=text_length; i>0; i--) {
+		if (use_ellipsis) {
+			if (total_width < calc_width(text.substr(0,ret_length)))
+				ret_length = i;
+			else
+				break;
+		}
+		else {
+			if (total_width < calc_width(text.substr(text_length-ret_length)))
+				ret_length = i;
+			else
+				break;
+		}
+	}
+
+	if (!use_ellipsis) {
+		return text.substr(text_length-ret_length);
+	}
+	else {
+		if (text_length <= 3)
+			return std::string("...");
+
+		if (text_length-ret_length < 3)
+			ret_length = text_length-3;
+
+		std::string ret_str = text.substr(0,ret_length);
+		ret_str = ret_str + '.' + '.' + '.';
+		return ret_str;
+	}
 }
 
 void SDLFontEngine::setFont(std::string _font) {
@@ -147,8 +192,7 @@ void SDLFontEngine::render(const std::string& text, int x, int y, int justify, I
 
 	// FIXME: becomes very slow after window resize.
 	// Not sure if this is a real reason
-	render_device->renderToImage(temp->getGraphics(), clip,
-								 target, dest_rect, active_font->blend);
+	render_device->renderToImage(temp->getGraphics(), clip, target, dest_rect);
 
 	// text is cached, we can free temp resource
 	delete temp;

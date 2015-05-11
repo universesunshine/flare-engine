@@ -17,12 +17,13 @@ You should have received a copy of the GNU General Public License along with
 FLARE.  If not, see http://www.gnu.org/licenses/
 */
 
+#include <SDL_image.h>
+
 #include <iostream>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "SDL_gfxBlitFunc.h"
 
 #include "SharedResources.h"
 #include "Settings.h"
@@ -264,14 +265,7 @@ int SDLSoftwareRenderDevice::createContext() {
 
 		bool window_created = window != NULL && renderer != NULL && screen != NULL && texture != NULL;
 
-		if (!window_created && !is_initialized) {
-			// If this is the first attempt and it failed we are not
-			// getting anywhere.
-			logError("SDLSoftwareRenderDevice: createContext() failed: %s", SDL_GetError());
-			SDL_Quit();
-			exit(1);
-		}
-		else if (!window_created) {
+		if (!window_created) {
 			// try previous setting first
 			FULLSCREEN = fullscreen;
 			HWSURFACE = hwsurface;
@@ -283,7 +277,14 @@ int SDLSoftwareRenderDevice::createContext() {
 				HWSURFACE = false;
 				VSYNC = false;
 				TEXTURE_FILTER = false;
-				return createContext();
+				int last_resort = createContext();
+				if (last_resort == -1 && !is_initialized) {
+					// If this is the first attempt and it failed we are not
+					// getting anywhere.
+					logError("SDLSoftwareRenderDevice: createContext() failed: %s", SDL_GetError());
+					Exit(1);
+				}
+				return last_resort;
 			}
 			else {
 				return 0;
@@ -314,18 +315,11 @@ int SDLSoftwareRenderDevice::createContext() {
 
 		// load persistent resources
 		SharedResources::loadIcons();
+		delete curs;
 		curs = new CursorManager();
 	}
 
 	return (is_initialized ? 0 : -1);
-}
-
-Rect SDLSoftwareRenderDevice::getContextSize() {
-	Rect size;
-	size.x = size.y = 0;
-	size.h = screen->h;
-	size.w = screen->w;
-	return size;
 }
 
 int SDLSoftwareRenderDevice::render(Renderable& r, Rect dest) {
@@ -348,18 +342,14 @@ int SDLSoftwareRenderDevice::render(Sprite *r) {
 	return SDL_BlitSurface(static_cast<SDLSoftwareImage *>(r->getGraphics())->surface, &src, screen, &dest);
 }
 
-int SDLSoftwareRenderDevice::renderToImage(Image* src_image, Rect& src, Image* dest_image, Rect& dest, bool dest_is_transparent) {
+int SDLSoftwareRenderDevice::renderToImage(Image* src_image, Rect& src, Image* dest_image, Rect& dest) {
 	if (!src_image || !dest_image) return -1;
 
 	SDL_Rect _src = src;
 	SDL_Rect _dest = dest;
 
-	if (dest_is_transparent)
-		return SDL_gfxBlitRGBA(static_cast<SDLSoftwareImage *>(src_image)->surface, &_src,
-							   static_cast<SDLSoftwareImage *>(dest_image)->surface, &_dest);
-	else
-		return SDL_BlitSurface(static_cast<SDLSoftwareImage *>(src_image)->surface, &_src,
-							   static_cast<SDLSoftwareImage *>(dest_image)->surface, &_dest);
+	return SDL_BlitSurface(static_cast<SDLSoftwareImage *>(src_image)->surface, &_src,
+						   static_cast<SDLSoftwareImage *>(dest_image)->surface, &_dest);
 }
 
 int SDLSoftwareRenderDevice::renderText(
@@ -511,6 +501,10 @@ void SDLSoftwareRenderDevice::commitFrame() {
 }
 
 void SDLSoftwareRenderDevice::destroyContext() {
+	if (curs) {
+		delete curs;
+		curs = NULL;
+	}
 	if (title) {
 		free(title);
 		title = NULL;
@@ -608,10 +602,9 @@ Image *SDLSoftwareRenderDevice::loadImage(std::string filename, std::string erro
 	SDL_Surface *cleanup = IMG_Load(mods->locate(filename).c_str());
 	if(!cleanup) {
 		if (!errormessage.empty())
-			logError("SDLSoftwareRenderDevice: %s: %s", errormessage.c_str(), IMG_GetError());
+			logError("SDLSoftwareRenderDevice: [%s] %s: %s", filename.c_str(), errormessage.c_str(), IMG_GetError());
 		if (IfNotFoundExit) {
-			SDL_Quit();
-			exit(1);
+			Exit(1);
 		}
 	}
 	else {

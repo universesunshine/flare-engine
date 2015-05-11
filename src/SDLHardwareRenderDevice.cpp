@@ -16,10 +16,13 @@ You should have received a copy of the GNU General Public License along with
 FLARE.  If not, see http://www.gnu.org/licenses/
 */
 
+#include <SDL_image.h>
+
 #include <iostream>
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "SharedResources.h"
 #include "Settings.h"
@@ -232,14 +235,7 @@ int SDLHardwareRenderDevice::createContext() {
 
 		bool window_created = window != NULL && renderer != NULL;
 
-		if (!window_created && !is_initialized) {
-			// If this is the first attempt and it failed we are not
-			// getting anywhere.
-			logError("SDLHardwareRenderDevice: createContext() failed: %s", SDL_GetError());
-			SDL_Quit();
-			exit(1);
-		}
-		else if (!window_created) {
+		if (!window_created) {
 			// try previous setting first
 			FULLSCREEN = fullscreen;
 			HWSURFACE = hwsurface;
@@ -251,7 +247,14 @@ int SDLHardwareRenderDevice::createContext() {
 				HWSURFACE = false;
 				VSYNC = false;
 				TEXTURE_FILTER = false;
-				return createContext();
+				int last_resort = createContext();
+				if (last_resort == -1 && !is_initialized) {
+					// If this is the first attempt and it failed we are not
+					// getting anywhere.
+					logError("SDLHardwareRenderDevice: createContext() failed: %s", SDL_GetError());
+					Exit(1);
+				}
+				return last_resort;
 			}
 			else {
 				return 0;
@@ -282,18 +285,11 @@ int SDLHardwareRenderDevice::createContext() {
 
 		// load persistent resources
 		SharedResources::loadIcons();
+		delete curs;
 		curs = new CursorManager();
 	}
 
 	return (is_initialized ? 0 : -1);
-}
-
-Rect SDLHardwareRenderDevice::getContextSize() {
-	Rect size;
-	size.x = size.y = 0;
-	SDL_GetWindowSize(window, &size.w, &size.h);
-
-	return size;
 }
 
 int SDLHardwareRenderDevice::render(Renderable& r, Rect dest) {
@@ -335,17 +331,12 @@ int SDLHardwareRenderDevice::render(Sprite *r) {
 	return SDL_RenderCopy(renderer, static_cast<SDLHardwareImage *>(r->getGraphics())->surface, &src, &dest);
 }
 
-int SDLHardwareRenderDevice::renderToImage(Image* src_image, Rect& src, Image* dest_image, Rect& dest, bool dest_is_transparent) {
+int SDLHardwareRenderDevice::renderToImage(Image* src_image, Rect& src, Image* dest_image, Rect& dest) {
 	if (!src_image || !dest_image)
 		return -1;
 
 	if (SDL_SetRenderTarget(renderer, static_cast<SDLHardwareImage *>(dest_image)->surface) != 0)
 		return -1;
-
-	if (dest_is_transparent) {
-		// do nothing
-		// this block is here to suppress an unused variable compiler warning
-	}
 
 	dest.w = src.w;
 	dest.h = src.h;
@@ -484,6 +475,11 @@ void SDLHardwareRenderDevice::commitFrame() {
 }
 
 void SDLHardwareRenderDevice::destroyContext() {
+	if (curs) {
+		delete curs;
+		curs = NULL;
+	}
+
 	SDL_FreeSurface(titlebar_icon);
 	titlebar_icon = NULL;
 
@@ -592,10 +588,9 @@ Image *SDLHardwareRenderDevice::loadImage(std::string filename, std::string erro
 	if(image->surface == NULL) {
 		delete image;
 		if (!errormessage.empty())
-			logError("SDLHardwareRenderDevice: %s: %s", errormessage.c_str(), IMG_GetError());
+			logError("SDLHardwareRenderDevice: [%s] %s: %s", filename.c_str(), errormessage.c_str(), IMG_GetError());
 		if (IfNotFoundExit) {
-			SDL_Quit();
-			exit(1);
+			Exit(1);
 		}
 		return NULL;
 	}

@@ -191,7 +191,7 @@ bool Entity::move() {
  *
  * Returns false on miss
  */
-bool Entity::takeHit(const Hazard &h) {
+bool Entity::takeHit(Hazard &h) {
 
 	//check if this enemy should be affected by this hazard based on the category
 	if(!powers->powers[h.power_index].target_categories.empty() && !stats.hero) {
@@ -238,7 +238,6 @@ bool Entity::takeHit(const Hazard &h) {
 	int avoidance = 0;
 	if(!powers->powers[h.power_index].trait_avoidance_ignore) {
 		avoidance = stats.get(STAT_AVOIDANCE);
-		if (stats.effects.triggered_block) avoidance *= 2;
 	}
 
 	int true_avoidance = 100 - (accuracy + 25 - avoidance);
@@ -247,6 +246,27 @@ bool Entity::takeHit(const Hazard &h) {
 		true_avoidance += 25;
 	clampFloor(true_avoidance, MIN_AVOIDANCE);
 	clampCeil(true_avoidance, MAX_AVOIDANCE);
+
+	if (h.missile && percentChance(stats.get(STAT_REFLECT))) {
+		// reflect the missile 180 degrees
+		h.setAngle(h.angle+M_PI);
+
+		// change hazard source to match the reflector's type
+		// maybe we should change the source stats pointer to the reflector's StatBlock
+		if (h.source_type == SOURCE_TYPE_HERO || h.source_type == SOURCE_TYPE_ALLY)
+			h.source_type = SOURCE_TYPE_ENEMY;
+		else if (h.source_type == SOURCE_TYPE_ENEMY)
+			h.source_type = stats.hero ? SOURCE_TYPE_HERO : SOURCE_TYPE_ALLY;
+
+		// reset the hazard ticks
+		h.lifespan = h.base_lifespan;
+
+		if (activeAnimation->getName() == "block") {
+			play_sfx_block = true;
+		}
+
+		return false;
+	}
 
 	if (percentChance(true_avoidance)) {
 		combat_text->addMessage(msg->get("miss"), stats.pos, COMBAT_MESSAGE_MISS);
@@ -277,10 +297,6 @@ bool Entity::takeHit(const Hazard &h) {
 		// substract absorption from armor
 		int absorption = randBetween(stats.get(STAT_ABS_MIN), stats.get(STAT_ABS_MAX));
 
-		if (stats.effects.triggered_block) {
-			absorption += absorption + stats.get(STAT_ABS_MAX); // blocking doubles your absorb amount
-		}
-
 		if (absorption > 0 && dmg > 0) {
 			int abs = absorption;
 			if ((abs*100)/dmg < MIN_BLOCK)
@@ -308,9 +324,10 @@ bool Entity::takeHit(const Hazard &h) {
 			else {
 				if (MAX_RESIST < 100) dmg = 1;
 			}
-			play_sfx_block = true;
-			if (activeAnimation->getName() == "block")
+			if (activeAnimation->getName() == "block") {
+				play_sfx_block = true;
 				resetActiveAnimation();
+			}
 		}
 	}
 
@@ -353,7 +370,7 @@ bool Entity::takeHit(const Hazard &h) {
 	if (dmg > 0) {
 
 		// damage always breaks stun
-		stats.effects.removeEffectType("stun");
+		stats.effects.removeEffectType(EFFECT_STUN);
 
 		if (stats.hp > 0) {
 			powers->effect(&stats, h.src_stats, h.power_index,h.source_type);

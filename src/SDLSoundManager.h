@@ -22,6 +22,8 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #ifndef SDL_SOUND_MANAGER_H
 #define SDL_SOUND_MANAGER_H
 
+#include <SDL_mixer.h>
+
 #include "SoundManager.h"
 
 class SDLSoundManager : public SoundManager {
@@ -32,6 +34,16 @@ public:
 	SoundManager::SoundID load(const std::string& filename, const std::string& errormessage);
 	void unload(SoundManager::SoundID);
 	void play(SoundManager::SoundID, std::string channel = GLOBAL_VIRTUAL_CHANNEL, FPoint pos = FPoint(0,0), bool loop = false);
+	void pauseAll();
+	void resumeAll();
+	void setVolumeSFX(int value);
+
+	void loadMusic(const std::string& filename);
+	void unloadMusic();
+	void playMusic();
+	void stopMusic();
+	void setVolumeMusic(int value);
+	bool isPlayingMusic();
 
 	void logic(FPoint center);
 	void reset();
@@ -53,6 +65,9 @@ private:
 	VirtualChannelMap channels;
 	PlaybackMap playback;
 	FPoint lastPos;
+
+	Mix_Music* music;
+	std::string music_filename;
 };
 
 #endif

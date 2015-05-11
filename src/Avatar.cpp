@@ -164,8 +164,7 @@ void Avatar::loadLayerDefinitions() {
 				unsigned dir = popFirstInt(infile.val);
 				if (dir>7) {
 					infile.error("Avatar: Hero layer direction must be in range [0,7]");
-					SDL_Quit();
-					exit(1);
+					Exit(1);
 				}
 				std::string layer = popFirstString(infile.val);
 				while (layer != "") {
@@ -362,7 +361,8 @@ void Avatar::handlePower(std::vector<ActionData> &action_queue) {
 
 				case POWSTATE_BLOCK:	// handle blocking
 					stats.cur_state = AVATAR_BLOCK;
-					stats.effects.triggered_block = true;
+					powers->activate(action.power, &stats, target);
+					stats.refresh_stats = true;
 					break;
 
 				case POWSTATE_INSTANT:	// handle instant powers
@@ -372,11 +372,7 @@ void Avatar::handlePower(std::vector<ActionData> &action_queue) {
 		}
 	}
 
-	if (stats.effects.triggered_block && !blocking) {
-		stats.cur_state = AVATAR_STANCE;
-		stats.effects.triggered_block = false;
-		stats.effects.clearTriggerEffects(TRIGGER_BLOCK);
-	}
+	stats.blocking = blocking;
 }
 
 /**
@@ -425,11 +421,24 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrict_power_us
 	if ((stats.hp > 0 || stats.effects.triggered_death) && !respawn && !transform_triggered) powers->activatePassives(&stats);
 	if (transform_triggered) transform_triggered = false;
 
+	// handle when the player stops blocking
+	if (stats.effects.triggered_block && !stats.blocking) {
+		stats.cur_state = AVATAR_STANCE;
+		stats.effects.triggered_block = false;
+		stats.effects.clearTriggerEffects(TRIGGER_BLOCK);
+		stats.refresh_stats = true;
+	}
+
 	stats.logic();
 
 	bool allowed_to_move;
 	bool allowed_to_use_power = true;
-	bool click_to_respawn = false;
+
+#ifdef __ANDROID__
+	const bool click_to_respawn = true;
+#else
+	const bool click_to_respawn = false;
+#endif
 
 	// check for revive
 	if (stats.hp <= 0 && stats.effects.revive) {
@@ -618,11 +627,7 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrict_power_us
 
 			setAnimation("block");
 
-			if (activeAnimation->getName() != "block") {
-				stats.cur_state = AVATAR_STANCE;
-				stats.effects.triggered_block = false;
-				stats.effects.clearTriggerEffects(TRIGGER_BLOCK);
-			}
+			stats.blocking = false;
 
 			break;
 
@@ -642,10 +647,6 @@ void Avatar::logic(std::vector<ActionData> &action_queue, bool restrict_power_us
 
 		case AVATAR_DEAD:
 			allowed_to_use_power = false;
-
-#ifdef __ANDROID__
-			click_to_respawn = true;
-#endif
 
 			if (stats.effects.triggered_death) break;
 

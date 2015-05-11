@@ -28,6 +28,7 @@ WidgetInput::WidgetInput(const std::string& filename)
 	, pressed(false)
 	, hover(false)
 	, cursor_frame(0)
+	, del_frame(0)
 	, inFocus(false)
 	, max_length(0) {
 
@@ -54,28 +55,8 @@ void WidgetInput::loadGraphics(const std::string& filename) {
 }
 
 void WidgetInput::trimText() {
-	unsigned max_characters = 0;
-	int width = 0;
-	int padding = font->getFontHeight();
-
-	if (max_length > 0 && text.length() > max_length) {
-		text = text.substr(0, max_length);
-	}
-
-	for (unsigned i=0; i<text.length(); i++) {
-		width += font->calc_width(text.substr(i,1));
-		if (width > (pos.w - padding)) {
-			break;
-		}
-		else {
-			max_characters++;
-		}
-	}
-
-	trimmed_text = text;
-	if (text.length() > max_characters) {
-		trimmed_text = text.substr(text.length() - max_characters, max_characters);
-	}
+	int padding =font->getFontHeight();
+	trimmed_text = font->trimTextToWidth(text, pos.w-padding, false);
 }
 
 void WidgetInput::logic() {
@@ -119,11 +100,19 @@ bool WidgetInput::logic(int x, int y) {
 		// handle backspaces
 		if (!inpt->lock[DEL] && inpt->pressing[DEL]) {
 			inpt->lock[DEL] = true;
+			del_frame = 0;
 			// remove utf-8 character
 			int n = text.length()-1;
 			while (n > 0 && ((text[n] & 0xc0) == 0x80) ) n--;
 			text = text.substr(0, n);
 			trimText();
+		} else if (inpt->pressing[DEL]) {
+			// delay unlocking of DEL lock
+			del_frame++;
+		}
+		if (inpt->lock[DEL] && del_frame >= MAX_FRAMES_PER_SEC / 8) {
+			// after X frames allow DEL again
+			inpt->lock[DEL]	= false;
 		}
 
 		// animate cursor

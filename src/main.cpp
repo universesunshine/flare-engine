@@ -43,7 +43,8 @@ static void init(const std::string &render_device_name) {
 	// SDL Inits
 	if ( SDL_Init (SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK) < 0 ) {
 		logError("main: Could not initialize SDL: %s", SDL_GetError());
-		exit(1);
+		logErrorDialog("ERROR: Could not initialize SDL.");
+		Exit(1);
 	}
 
 	// Shared Resources set-up
@@ -57,12 +58,14 @@ static void init(const std::string &render_device_name) {
 		logError("A copy of the default mod is in the \"mods\" directory of the flare-engine repo.");
 		logError("The repo is located at: https://github.com/clintbellanger/flare-engine");
 		logError("Try again after copying the default mod to one of the above directories. Exiting.");
-		exit(1);
+		logErrorDialog("ERROR: No \"default\" mod found.");
+		Exit(1);
 	}
 
 	if (!loadSettings()) {
-		logError("%s", ("main: Could not load settings file: ‘" + PATH_CONF + FILE_SETTINGS + "’.").c_str());
-		exit(1);
+		logError("main: Could not load settings file: '%s'.", (PATH_CONF + FILE_SETTINGS).c_str());
+		logErrorDialog("ERROR: Could not load settings file.");
+		Exit(1);
 	}
 
 	msg = new MessageEngine();
@@ -83,23 +86,14 @@ static void init(const std::string &render_device_name) {
 	int status = render_device->createContext();
 
 	if (status == -1) {
-
-		logError("main: Error during SDL_SetVideoMode: %s", SDL_GetError());
-		SDL_Quit();
-		exit(1);
+		logError("main: Could not create rendering context: %s", SDL_GetError());
+		logErrorDialog("ERROR: Could not create rendering context");
+		Exit(1);
 	}
-
-	// initialize share icons resource
-	SharedResources::loadIcons();
 
 	// Set Gamma
 	if (CHANGE_GAMMA)
 		render_device->setGamma(GAMMA);
-
-	if (AUDIO && Mix_OpenAudio(22050, AUDIO_S16SYS, 2, 1024)) {
-		logError("main: Error during Mix_OpenAudio: %s", SDL_GetError());
-		AUDIO = false;
-	}
 
 	snd = getSoundManager();
 
@@ -122,13 +116,7 @@ static void init(const std::string &render_device_name) {
 		logInfo("Using joystick #%d.", JOYSTICK_DEVICE);
 	}
 
-	// Set sound effects volume from settings file
-	if (AUDIO)
-		Mix_Volume(-1, SOUND_VOLUME);
-
 	gswitch = new GameSwitcher();
-
-	curs = new CursorManager();
 }
 
 static void mainLoop () {
@@ -220,9 +208,6 @@ static void cleanup() {
 	delete mods;
 	delete msg;
 	delete snd;
-	delete curs;
-
-	Mix_CloseAudio();
 
 	if (render_device)
 		render_device->destroyContext();
