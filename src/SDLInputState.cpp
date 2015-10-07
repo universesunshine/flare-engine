@@ -28,14 +28,34 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "SharedResources.h"
 #include "UtilsDebug.h"
 #include "UtilsParsing.h"
+#include "SaveLoad.h"
+#include "SharedGameResources.h"
 
 #include <math.h>
+
+#if defined(__ANDROID__) || defined (__IPHONEOS__)
+
+int isExitEvent(void* userdata, SDL_Event* event)
+{
+	if (event->type == SDL_APP_TERMINATING)
+	{
+		logInfo("Terminating app, saving...");
+		save_load->saveGame();
+		logInfo("Saved, ready to exit.");
+		return 0;
+	}
+	return 1;
+}
+
+#endif
 
 SDLInputState::SDLInputState(void)
 	: InputState()
 {
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined (__IPHONEOS__)
 	SDL_StartTextInput();
+#else
+	SDL_SetEventFilter(isExitEvent, NULL);
 #endif
 
 	defaultQwertyKeyBindings();
@@ -54,7 +74,7 @@ SDLInputState::SDLInputState(void)
 void SDLInputState::defaultQwertyKeyBindings () {
 	binding[CANCEL] = SDLK_ESCAPE;
 	binding[ACCEPT] = SDLK_RETURN;
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined (__IPHONEOS__)
     binding[CANCEL] = SDLK_AC_BACK;
 	binding[ACCEPT] = SDLK_MENU;
 #endif
@@ -125,7 +145,7 @@ void SDLInputState::handle() {
 
 		switch (event.type) {
 
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined (__IPHONEOS__)
 			case SDL_MOUSEMOTION:
 				mouse.x = event.motion.x;
 				mouse.y = event.motion.y;
@@ -164,13 +184,16 @@ void SDLInputState::handle() {
 				}
 				break;
 #else
-			// detect restoring hidden Android app to bypass frameskip
+			// detect restoring hidden Mobile app to bypass frameskip
 			case SDL_WINDOWEVENT:
 				if (event.window.event == SDL_WINDOWEVENT_RESIZED) {
 					window_resized = true;
 					render_device->windowResize();
 				}
 				else if (event.window.event == SDL_WINDOWEVENT_MINIMIZED) {
+					logInfo("Minimizing app, saving...");
+					save_load->saveGame();
+					logInfo("Game saved");
 					window_minimized = true;
 					snd->pauseAll();
 				}
@@ -179,7 +202,7 @@ void SDLInputState::handle() {
 					snd->resumeAll();
 				}
 				break;
-			// Android touch events
+			// Mobile touch events
 			case SDL_FINGERMOTION:
 				mouse.x = static_cast<int>((event.tfinger.x + event.tfinger.dx) * VIEW_W);
 				mouse.y = static_cast<int>((event.tfinger.y + event.tfinger.dy) * VIEW_H);
