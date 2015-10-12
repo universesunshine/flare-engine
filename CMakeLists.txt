@@ -86,6 +86,7 @@ Else (NOT SDL2TTF_FOUND)
 	INCLUDE_DIRECTORIES(${SDL2TTF_INCLUDE_DIR})
 EndIf (NOT SDL2TTF_FOUND)
 
+Find_Package (OpenGL REQUIRED)
 
 # Sources
 
@@ -158,6 +159,8 @@ Set (FLARE_SOURCES
 	./src/ModManager.cpp
 	./src/NPC.cpp
 	./src/NPCManager.cpp
+	./src/OpenGLRenderDevice.cpp
+	./src/OpenGL_EXT.cpp
 	./src/PowerManager.cpp
 	./src/QuestLog.cpp
 	./src/RenderDevice.cpp
@@ -264,6 +267,8 @@ Set (FLARE_HEADERS
 	./src/ModManager.h
 	./src/NPC.h
 	./src/NPCManager.h
+	./src/OpenGLRenderDevice.h
+	./src/OpenGL_EXT.h
 	./src/PowerManager.h
 	./src/QuestLog.h
 	./src/RenderDevice.h
@@ -315,7 +320,7 @@ If (NOT SDL2MAIN_LIBRARY)
   Set (SDL2MAIN_LIBRARY "")
 EndIf (NOT SDL2MAIN_LIBRARY)
 
-Target_Link_Libraries (flare ${CMAKE_LD_FLAGS} ${SDL2_LIBRARY} ${SDL2IMAGE_LIBRARY} ${SDL2MIXER_LIBRARY} ${SDL2TTF_LIBRARY} ${SDL2MAIN_LIBRARY})
+Target_Link_Libraries (flare ${CMAKE_LD_FLAGS} ${SDL2_LIBRARY} ${SDL2IMAGE_LIBRARY} ${SDL2MIXER_LIBRARY} ${SDL2TTF_LIBRARY} ${SDL2MAIN_LIBRARY} ${OPENGL_gl_LIBRARY})
 
 
 # installing to the proper places
