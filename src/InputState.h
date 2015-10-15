@@ -124,6 +124,8 @@ public:
 	bool pressing_down;
 
 protected:
+	Point scaleMouse(unsigned int x, unsigned int y);
+
 	bool un_press[key_count];
 	Point current_touch;
 	bool dump_event;

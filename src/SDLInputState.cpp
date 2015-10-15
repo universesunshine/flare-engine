@@ -147,8 +147,7 @@ void SDLInputState::handle() {
 
 #if !defined(__ANDROID__) && !defined (__IPHONEOS__)
 			case SDL_MOUSEMOTION:
-				mouse.x = event.motion.x;
-				mouse.y = event.motion.y;
+				mouse = scaleMouse(event.motion.x, event.motion.y);
 				break;
 			case SDL_MOUSEWHEEL:
 				if (event.wheel.y > 0) {
@@ -158,8 +157,7 @@ void SDLInputState::handle() {
 				}
 				break;
 			case SDL_MOUSEBUTTONDOWN:
-				mouse.x = event.button.x;
-				mouse.y = event.button.y;
+				mouse = scaleMouse(event.button.x, event.button.y);
 				for (int key=0; key<key_count; key++) {
 					if (event.button.button == binding[key] || event.button.button == binding_alt[key]) {
 						pressing[key] = true;
@@ -168,8 +166,7 @@ void SDLInputState::handle() {
 				}
 				break;
 			case SDL_MOUSEBUTTONUP:
-				mouse.x = event.button.x;
-				mouse.y = event.button.y;
+				mouse = scaleMouse(event.button.x, event.button.y);
 				for (int key=0; key<key_count; key++) {
 					if (event.button.button == binding[key] || event.button.button == binding_alt[key]) {
 						un_press[key] = true;
