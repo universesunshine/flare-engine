@@ -304,10 +304,10 @@ Point InputState::scaleMouse(unsigned int x, unsigned int y) {
 	}
 
 	Point scaled_mouse;
-	int offsetY = static_cast<int>(SCREEN_H - VIEW_H / VIEW_SCALING) / 2;
+	int offsetY = static_cast<int>(((SCREEN_H - VIEW_H / VIEW_SCALING) / 2) * VIEW_SCALING);
 
-	scaled_mouse.x = static_cast<int>(x * VIEW_SCALING);
-	scaled_mouse.y = static_cast<int>(y * VIEW_SCALING) - offsetY;
+	scaled_mouse.x = static_cast<int>(static_cast<float>(x) * VIEW_SCALING);
+	scaled_mouse.y = static_cast<int>(static_cast<float>(y) * VIEW_SCALING) - offsetY;
 
 	return scaled_mouse;
 }
