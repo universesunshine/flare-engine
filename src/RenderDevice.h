@@ -114,10 +114,8 @@ public:
 	virtual int getWidth() const;
 	virtual int getHeight() const;
 
-	virtual void fillWithColor(Uint32 color) = 0;
-	virtual void drawPixel(int x, int y, Uint32 color) = 0;
-	virtual Uint32 MapRGB(Uint8 r, Uint8 g, Uint8 b) = 0;
-	virtual Uint32 MapRGBA(Uint8 r, Uint8 g, Uint8 b, Uint8 a) = 0;
+	virtual void fillWithColor(const Color& color) = 0;
+	virtual void drawPixel(int x, int y, const Color& color) = 0;
 	virtual Image* resize(int width, int height) = 0;
 
 	class Sprite *createSprite(bool clipToSize = true);
@@ -197,10 +195,8 @@ public:
 	virtual Image* renderTextToImage(FontStyle* font_style, const std::string& text, Color color, bool blended = true) = 0;
 	virtual void blankScreen() = 0;
 	virtual void commitFrame() = 0;
-	virtual void drawPixel(int x, int y, Uint32 color) = 0;
-	virtual void drawRectangle(const Point& p0, const Point& p1, Uint32 color) = 0;
-	virtual Uint32 MapRGB(Uint8 r, Uint8 g, Uint8 b) = 0;
-	virtual Uint32 MapRGBA(Uint8 r, Uint8 g, Uint8 b, Uint8 a) = 0;
+	virtual void drawPixel(int x, int y, const Color& color) = 0;
+	virtual void drawRectangle(const Point& p0, const Point& p1, const Color& color) = 0;
 	virtual void windowResize() = 0;
 
 protected:
@@ -229,7 +225,7 @@ private:
 
 	IMAGE_CACHE_CONTAINER cache;
 
-	virtual void drawLine(int x0, int y0, int x1, int y1, Uint32 color) = 0;
+	virtual void drawLine(int x0, int y0, int x1, int y1, const Color& color) = 0;
 };
 
 #endif // RENDERDEVICE_H
