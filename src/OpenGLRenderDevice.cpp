@@ -84,7 +84,11 @@ void OpenGLImage::fillWithColor(const Color& color) {
  * Set the pixel at (x, y) to the given value
  */
 void OpenGLImage::drawPixel(int x, int y, const Color& color) {
+	(void)x;
+	(void)y;
+	(void)color;
 	if ((int)texture == -1) return;
+	logInfo("drawPixel() UNIMPLEMENTED");
 }
 
 /**
@@ -96,12 +100,6 @@ Image* OpenGLImage::resize(int width, int height) {
 		return NULL;
 	logInfo("resize() UNIMPLEMENTED");
 	return this;
-}
-
-Color OpenGLImage::readPixel(int x, int y) {
-	if ((int)texture == -1) return Color();
-	logInfo("readPixel() UNIMPLEMENTED");
-	return Color();
 }
 
 OpenGLRenderDevice::OpenGLRenderDevice()
@@ -547,10 +545,10 @@ int OpenGLRenderDevice::renderToImage(Image* src_image, Rect& src, Image* dest_i
 	glGetIntegerv(GL_VIEWPORT, view);
 	configureFrameBuffer(dst_texture, frameW, frameH);
 
-	m_offset[0] = 2.0f * static_cast<float>(_dest.x)/frameW;
-	m_offset[1] = 2.0f * static_cast<float>(_dest.y)/frameH;
-	m_offset[2] = static_cast<float>(_src.w)/frameW;
-	m_offset[3] = static_cast<float>(_src.h)/frameH;
+	m_offset[0] = 2.0f * static_cast<float>(_dest.x)/static_cast<float>(frameW);
+	m_offset[1] = 2.0f * static_cast<float>(_dest.y)/static_cast<float>(frameH);
+	m_offset[2] = static_cast<float>(_src.w)/static_cast<float>(frameW);
+	m_offset[3] = static_cast<float>(_src.h)/static_cast<float>(frameH);
 
 	int height = static_cast<OpenGLImage *>(src_image)->getHeight();
 	int width = static_cast<OpenGLImage *>(src_image)->getWidth();
@@ -656,6 +654,10 @@ void OpenGLRenderDevice::drawPixel(
 	int y,
 	const Color& color
 ) {
+	(void)x;
+	(void)y;
+	(void)color;
+
 	logInfo("drawPixel() UNIMPLEMENTED");
 }
 
@@ -666,6 +668,12 @@ void OpenGLRenderDevice::drawLine(
 	int y1,
 	const Color& color
 ) {
+	(void)x0;
+	(void)y0;
+	(void)x1;
+	(void)y1;
+	(void)color;
+
 	logInfo("drawLine() UNIMPLEMENTED");
 }
 
