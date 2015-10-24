@@ -216,6 +216,18 @@ bool Entity::takeHit(Hazard &h) {
 	if(stats.cur_state == AVATAR_DEAD && stats.hero)
 		return false;
 
+	// some attacks will always miss enemies of a certain movement type
+	if (stats.movement_type == MOVEMENT_NORMAL && !h.target_movement_normal)
+		return false;
+	else if (stats.movement_type == MOVEMENT_FLYING && !h.target_movement_flying)
+		return false;
+	else if (stats.movement_type == MOVEMENT_INTANGIBLE && !h.target_movement_intangible)
+		return false;
+
+	// prevent hazard aoe from hitting targets behind walls
+	if (h.walls_block_aoe && !mapr->collider.line_of_movement(stats.pos.x, stats.pos.y, h.pos.x, h.pos.y, MOVEMENT_NORMAL))
+		return false;
+
 	//if the target is an enemy and they are not already in combat, activate a beacon to draw other enemies into battle
 	if (!stats.in_combat && !stats.hero && !stats.hero_ally) {
 		stats.join_combat = true;

@@ -51,6 +51,7 @@ public:
 	void rewardXP(int amount, bool show_message);
 	void restoreHPMP(std::string s);
 	void addMsg(const std::string& msg);
+	bool checkAllRequirements(const Event_Component& ec);
 
 	std::vector<std::string> status;
 	std::string log_msg;
@@ -61,7 +62,6 @@ public:
 	int *currency;
 	StatBlock *hero;
 
-	bool quest_update;
 	float bonus_xp;		// Fractional XP points not yet awarded (e.g. killing 1 XP enemies with a +25% ring)
 };
 

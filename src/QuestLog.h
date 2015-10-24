@@ -37,6 +37,8 @@ private:
 	// list of quests.
 	std::vector<std::vector<Event_Component> >quests;
 
+	std::vector<size_t> active_quest_ids;
+
 public:
 	QuestLog(MenuLog *_log);
 	~QuestLog();
@@ -45,7 +47,6 @@ public:
 	void logic();
 	void createQuestList();
 	bool newQuestNotification;
-	bool resetQuestNotification;
 };
 
 #endif
