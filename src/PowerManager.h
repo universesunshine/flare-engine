@@ -228,6 +228,13 @@ public:
 	int spawn_level_every;
 	int spawn_level_stat;
 
+	// targeting by movement type
+	bool target_movement_normal;
+	bool target_movement_flying;
+	bool target_movement_intangible;
+
+	bool walls_block_aoe;
+
 	// loot
 	std::vector<Event_Component> loot;
 
@@ -322,7 +329,13 @@ public:
 		, spawn_level_mode(SPAWN_LEVEL_MODE_DEFAULT)
 		, spawn_level_qty(0)
 		, spawn_level_every(0)
-		, spawn_level_stat(SPAWN_LEVEL_STAT_MENTAL) {
+		, spawn_level_stat(SPAWN_LEVEL_STAT_MENTAL)
+
+		, target_movement_normal(true)
+		, target_movement_flying(true)
+		, target_movement_intangible(true)
+
+		, walls_block_aoe(false) {
 	}
 
 };
