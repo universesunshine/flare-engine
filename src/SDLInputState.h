@@ -37,6 +37,9 @@ public:
 	std::string getJoystickName(int index);
 	std::string getKeyName(int key);
 	std::string getBindingString(int key, int bindings_list = INPUT_BINDING_DEFAULT);
+	std::string getMovementString();
+	std::string getAttackString();
+	std::string getContinueString();
 };
 
 #endif
