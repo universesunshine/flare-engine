@@ -308,23 +308,23 @@ void NPC::logic() {
 	{
 		if (mapr->events[i].npcName == name)
 		{
-			mapr->events[i].location.x = stats.pos.x;
-			mapr->events[i].location.y = stats.pos.y;
+			mapr->events[i].location.x = static_cast<int>(stats.pos.x);
+			mapr->events[i].location.y = static_cast<int>(stats.pos.y);
 
-			mapr->events[i].hotspot.x = stats.pos.x;
-			mapr->events[i].hotspot.y = stats.pos.y;
+			mapr->events[i].hotspot.x = static_cast<int>(stats.pos.x);
+			mapr->events[i].hotspot.y = static_cast<int>(stats.pos.y);
 
 			mapr->events[i].center.x =
 				static_cast<float>(stats.pos.x) + static_cast<float>(mapr->events[i].hotspot.w)/2;
 			mapr->events[i].center.y =
 				static_cast<float>(stats.pos.y) + static_cast<float>(mapr->events[i].hotspot.h)/2;
 
-			for (int ci = 0; ci < mapr->events[i].components.size(); ci++)
+			for (size_t ci = 0; ci < mapr->events[i].components.size(); ci++)
 			{
 				if (mapr->events[i].components[ci].type == EC_NPC_HOTSPOT)
 				{
-					mapr->events[i].components[ci].x = stats.pos.x;
-					mapr->events[i].components[ci].y = stats.pos.y;
+					mapr->events[i].components[ci].x = static_cast<int>(stats.pos.x);
+					mapr->events[i].components[ci].y = static_cast<int>(stats.pos.y);
 				}
 			}
 		}
@@ -336,15 +336,15 @@ void NPC::logic() {
 /**
  * type is a const int enum, see NPC.h
  */
-bool NPC::playSound(int type, int id) {
-	if (type == NPC_VOX_INTRO) {
+bool NPC::playSound(int vox_type, int id) {
+	if (vox_type == NPC_VOX_INTRO) {
 		int roll;
 		if (vox_intro.empty()) return false;
 		roll = rand() % static_cast<int>(vox_intro.size());
 		snd->play(vox_intro[roll], "NPC_VOX");
 		return true;
 	}
-	if (type == NPC_VOX_QUEST) {
+	if (vox_type == NPC_VOX_QUEST) {
 		if (id < 0 || id >= static_cast<int>(vox_quests.size())) return false;
 		snd->play(vox_quests[id], "NPC_VOX");
 		return true;
@@ -563,8 +563,8 @@ Renderable NPC::getRender() {
 	return r;
 }
 
-bool NPC::isDialogType(const EVENT_COMPONENT_TYPE &type) {
-	return type == EC_NPC_DIALOG_THEM || type == EC_NPC_DIALOG_YOU;
+bool NPC::isDialogType(const EVENT_COMPONENT_TYPE &event_type) {
+	return event_type == EC_NPC_DIALOG_THEM || event_type == EC_NPC_DIALOG_YOU;
 }
 
 NPC::~NPC() {
