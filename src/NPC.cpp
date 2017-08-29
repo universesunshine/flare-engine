@@ -280,19 +280,19 @@ void NPC::loadGraphics() {
  * returns -1 if not loaded or error.
  * returns index in specific vector where to be found.
  */
-int NPC::loadSound(const std::string& fname, int type) {
+int NPC::loadSound(const std::string& fname, int vox_type) {
 
 	SoundManager::SoundID a = snd->load(fname, "NPC voice");
 
 	if (!a)
 		return -1;
 
-	if (type == NPC_VOX_INTRO) {
+	if (vox_type == NPC_VOX_INTRO) {
 		vox_intro.push_back(a);
 		return static_cast<int>(vox_intro.size()) - 1;
 	}
 
-	if (type == NPC_VOX_QUEST) {
+	if (vox_type == NPC_VOX_QUEST) {
 		vox_quests.push_back(a);
 		return static_cast<int>(vox_quests.size()) - 1;
 	}
@@ -304,7 +304,7 @@ void NPC::logic() {
 	Enemy::logic();
 
 	// Update event position after NPC has moved
-	for (int i = 0; i < mapr->events.size(); i++)
+	for (size_t i = 0; i < mapr->events.size(); i++)
 	{
 		if (mapr->events[i].npcName == name)
 		{
@@ -318,7 +318,7 @@ void NPC::logic() {
 				static_cast<float>(stats.pos.x) + static_cast<float>(mapr->events[i].hotspot.w)/2;
 			mapr->events[i].center.y =
 				static_cast<float>(stats.pos.y) + static_cast<float>(mapr->events[i].hotspot.h)/2;
-			
+
 			for (int ci = 0; ci < mapr->events[i].components.size(); ci++)
 			{
 				if (mapr->events[i].components[ci].type == EC_NPC_HOTSPOT)
