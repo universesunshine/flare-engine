@@ -37,7 +37,7 @@ enum EVENT_ACTIVATE_TYPE {
 
 class Event {
 public:
-	std::string npcName;
+	std::string id;
 	std::string type;
 	int activate_type;
 	std::vector<Event_Component> components;
