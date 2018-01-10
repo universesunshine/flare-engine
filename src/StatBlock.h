@@ -157,6 +157,12 @@ public:
 	int get(STAT stat) {
 		return current[stat];
 	}
+	int getDamageMin(size_t dmg_type) {
+		return current[STAT_COUNT + (dmg_type * 2)];
+	}
+	int getDamageMax(size_t dmg_type) {
+		return current[STAT_COUNT + (dmg_type * 2) + 1];
+	}
 
 	// additional values to base stats, given by items
 	std::vector<int> primary_additional;
@@ -182,12 +188,8 @@ public:
 	float speed_default;
 
 	// addition damage and absorb granted from items
-	int dmg_melee_min_add;
-	int dmg_melee_max_add;
-	int dmg_ment_min_add;
-	int dmg_ment_max_add;
-	int dmg_ranged_min_add;
-	int dmg_ranged_max_add;
+	std::vector<int> dmg_min_add;
+	std::vector<int> dmg_max_add;
 	int absorb_min_add;
 	int absorb_max_add;
 
@@ -291,12 +293,12 @@ public:
 	std::string animations;
 
 	// default sounds
-	std::vector<std::pair<std::string, std::string> > sfx_attack;
+	std::vector<std::pair<std::string, std::vector<std::string> > > sfx_attack;
 	std::string sfx_step;
-	std::string sfx_hit;
-	std::string sfx_die;
-	std::string sfx_critdie;
-	std::string sfx_block;
+	std::vector<std::string> sfx_hit;
+	std::vector<std::string> sfx_die;
+	std::vector<std::string> sfx_critdie;
+	std::vector<std::string> sfx_block;
 	std::string sfx_levelup;
 
 	// formula numbers

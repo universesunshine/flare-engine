@@ -163,11 +163,9 @@ void BehaviorStandard::findTarget() {
 
 	// check entering combat (because the player hit the enemy)
 	if (e->stats.join_combat) {
-		AIPower* ai_power = NULL;
-
 		e->stats.in_combat = true;
 
-		ai_power = e->stats.getAIPower(AI_POWER_BEACON);
+		AIPower* ai_power = e->stats.getAIPower(AI_POWER_BEACON);
 		if (ai_power != NULL) {
 			powers->activate(ai_power->id, &e->stats, e->stats.pos); //emit beacon
 		}
@@ -236,6 +234,7 @@ void BehaviorStandard::findTarget() {
 
 	// If we have a successful chance_flee roll, try to move to a safe distance
 	if (
+			e->stats.in_combat &&
 			e->stats.cur_state == ENEMY_STANCE &&
 			!move_to_safe_dist && hero_dist < e->stats.flee_range &&
 			hero_dist >= e->stats.melee_range &&
@@ -308,7 +307,7 @@ void BehaviorStandard::checkPower() {
 	// The second stage occurs in updateState()
 
 	// pick a power from the available powers for this creature
-	if (los && (e->stats.cur_state == ENEMY_STANCE || e->stats.cur_state == ENEMY_MOVE)) {
+	if (e->stats.cur_state == ENEMY_STANCE || e->stats.cur_state == ENEMY_MOVE) {
 		AIPower* ai_power = NULL;
 
 		// check half dead power use
@@ -325,8 +324,14 @@ void BehaviorStandard::checkPower() {
 		}
 
 		if (ai_power != NULL) {
-			e->stats.cur_state = ENEMY_POWER;
-			e->stats.activated_power = ai_power;
+			const Power& pwr = powers->powers[ai_power->id];
+			if (!los && (pwr.requires_los || pwr.requires_los_default)) {
+				ai_power = NULL;
+			}
+			if (ai_power != NULL) {
+				e->stats.cur_state = ENEMY_POWER;
+				e->stats.activated_power = ai_power;
+			}
 		}
 	}
 
@@ -442,10 +447,19 @@ void BehaviorStandard::checkMove() {
 
 	// if patrolling waypoints and has reached a waypoint, cycle to the next one
 	if (!e->stats.waypoints.empty()) {
-		FPoint waypoint = e->stats.waypoints.front();
-		FPoint pos = e->stats.pos;
 		// if the patroller is close to the waypoint
-		if (fabs(waypoint.x - pos.x) <= 0.5f && fabs(waypoint.y - pos.y) <= 0.5f) {
+		FPoint waypoint = e->stats.waypoints.front();
+		float real_speed = e->stats.speed * speedMultiplyer[e->stats.direction] * e->stats.effects.speed / 100;
+		float waypoint_dist = calcDist(waypoint, e->stats.pos);
+
+		FPoint saved_pos = e->stats.pos;
+		e->move();
+		float new_dist = calcDist(waypoint, e->stats.pos);
+		e->stats.pos = saved_pos;
+
+		if (waypoint_dist <= real_speed || (waypoint_dist <= 0.5f && new_dist > waypoint_dist)) {
+			e->stats.pos = waypoint;
+			e->stats.turn_ticks = e->stats.turn_delay;
 			e->stats.waypoints.pop();
 			// pick a new random point if we're wandering
 			if (e->stats.wander) {
@@ -664,7 +678,7 @@ void BehaviorStandard::updateState() {
 
 			e->setAnimation("die");
 			if (e->activeAnimation->isFirstFrame()) {
-				snd->play(e->sound_die);
+				e->playSound(ENTITY_SOUND_DIE);
 				e->stats.corpse_ticks = CORPSE_TIMEOUT;
 				e->stats.effects.clearEffects();
 			}
@@ -695,7 +709,7 @@ void BehaviorStandard::updateState() {
 
 			e->setAnimation("critdie");
 			if (e->activeAnimation->isFirstFrame()) {
-				snd->play(e->sound_critdie);
+				e->playSound(ENTITY_SOUND_CRITDIE);
 				e->stats.corpse_ticks = CORPSE_TIMEOUT;
 				e->stats.effects.clearEffects();
 			}

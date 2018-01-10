@@ -709,6 +709,7 @@ void MenuPowers::createTooltip(TooltipData* tip, int slot_num, const std::vector
 			}
 
 			ss << pwr.post_effects[i].magnitude;
+			bool found_key = false;
 
 			for (size_t j=0; j<STAT_COUNT; ++j) {
 				if (pwr.post_effects[i].id == STAT_KEY[j]) {
@@ -717,21 +718,43 @@ void MenuPowers::createTooltip(TooltipData* tip, int slot_num, const std::vector
 
 					ss << " " << STAT_NAME[j];
 
+					found_key = true;
 					break;
 				}
 			}
 
-			for (size_t j=0; j<ELEMENTS.size(); ++j) {
-				if (pwr.post_effects[i].id == ELEMENTS[j].id + "_resist") {
-					ss << "% " << msg->get("%s Resistance", ELEMENTS[j].name.c_str());
-					break;
+			if (!found_key) {
+				for (size_t j=0; j<ELEMENTS.size(); ++j) {
+					if (pwr.post_effects[i].id == ELEMENTS[j].id + "_resist") {
+						ss << "% " << msg->get("%s Resistance", ELEMENTS[j].name.c_str());
+						found_key = true;
+						break;
+					}
 				}
 			}
 
-			for (size_t j=0; j<PRIMARY_STATS.size(); ++j) {
-				if (pwr.post_effects[i].id == PRIMARY_STATS[j].id) {
-					ss << " " << PRIMARY_STATS[j].name;
-					break;
+			if (!found_key) {
+				for (size_t j=0; j<PRIMARY_STATS.size(); ++j) {
+					if (pwr.post_effects[i].id == PRIMARY_STATS[j].id) {
+						ss << " " << PRIMARY_STATS[j].name;
+						found_key = true;
+						break;
+					}
+				}
+			}
+
+			if (!found_key) {
+				for (size_t j=0; j<DAMAGE_TYPES.size(); ++j) {
+					if (pwr.post_effects[i].id == DAMAGE_TYPES[j].min) {
+						ss << " " << DAMAGE_TYPES[j].name_min;
+						found_key = true;
+						break;
+					}
+					else if (pwr.post_effects[i].id == DAMAGE_TYPES[j].max) {
+						ss << " " << DAMAGE_TYPES[j].name_max;
+						found_key = true;
+						break;
+					}
 				}
 			}
 		}
@@ -803,12 +826,15 @@ void MenuPowers::createTooltip(TooltipData* tip, int slot_num, const std::vector
 				ss << msg->get("Lifespan");
 			}
 			else if (effect_ptr->type == "shield") {
+				if (pwr.base_damage == DAMAGE_TYPES.size())
+					continue;
+
 				if (pwr.mod_damage_mode == STAT_MODIFIER_MODE_MULTIPLY) {
-					int magnitude = stats->get(STAT_DMG_MENT_MAX) * pwr.mod_damage_value_min / 100;
+					int magnitude = stats->getDamageMax(pwr.base_damage) * pwr.mod_damage_value_min / 100;
 					ss << magnitude;
 				}
 				else if (pwr.mod_damage_mode == STAT_MODIFIER_MODE_ADD) {
-					int magnitude = stats->get(STAT_DMG_MENT_MAX) + pwr.mod_damage_value_min;
+					int magnitude = stats->getDamageMax(pwr.base_damage) + pwr.mod_damage_value_min;
 					ss << magnitude;
 				}
 				else if (pwr.mod_damage_mode == STAT_MODIFIER_MODE_ABSOLUTE) {
@@ -818,14 +844,17 @@ void MenuPowers::createTooltip(TooltipData* tip, int slot_num, const std::vector
 						ss << pwr.mod_damage_value_min << "-" << pwr.mod_damage_value_max;
 				}
 				else {
-					ss << stats->get(STAT_DMG_MENT_MAX);
+					ss << stats->getDamageMax(pwr.base_damage);
 				}
 
 				ss << " " << msg->get("Magical Shield");
 			}
 			else if (effect_ptr->type == "heal") {
-				int mag_min = stats->get(STAT_DMG_MENT_MIN);
-				int mag_max = stats->get(STAT_DMG_MENT_MAX);
+				if (pwr.base_damage == DAMAGE_TYPES.size())
+					continue;
+
+				int mag_min = stats->getDamageMin(pwr.base_damage);
+				int mag_max = stats->getDamageMax(pwr.base_damage);
 
 				if (pwr.mod_damage_mode == STAT_MODIFIER_MODE_MULTIPLY) {
 					mag_min = mag_min * pwr.mod_damage_value_min / 100;
@@ -897,14 +926,9 @@ void MenuPowers::createTooltip(TooltipData* tip, int slot_num, const std::vector
 			}
 			ss << " ";
 
-			if (pwr.base_damage == BASE_DAMAGE_NONE)
-				ss << msg->get("Damage");
-			else if (pwr.base_damage == BASE_DAMAGE_MELEE)
-				ss << msg->get("Melee Damage");
-			else if (pwr.base_damage == BASE_DAMAGE_RANGED)
-				ss << msg->get("Ranged Damage");
-			else if (pwr.base_damage == BASE_DAMAGE_MENT)
-				ss << msg->get("Mental Damage");
+			if (pwr.base_damage != DAMAGE_TYPES.size()) {
+				ss << DAMAGE_TYPES[pwr.base_damage].name;
+			}
 
 			if (pwr.count > 1 && pwr.type != POWTYPE_REPEATER)
 				ss << " (x" << pwr.count << ")";

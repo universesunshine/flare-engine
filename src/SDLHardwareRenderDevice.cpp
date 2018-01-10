@@ -109,6 +109,7 @@ SDLHardwareRenderDevice::SDLHardwareRenderDevice()
 	, texture(NULL)
 	, titlebar_icon(NULL)
 	, title(NULL)
+	, background_color(0,0,0,0)
 {
 	logInfo("Using Render Device: SDLHardwareRenderDevice (hardware, SDL 2)");
 
@@ -404,7 +405,7 @@ void SDLHardwareRenderDevice::drawRectangle(const Point& p0, const Point& p1, co
 
 void SDLHardwareRenderDevice::blankScreen() {
 	SDL_SetRenderTarget(renderer, texture);
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	SDL_SetRenderDrawColor(renderer, background_color.r, background_color.g, background_color.b, background_color.a);
 	SDL_RenderClear(renderer);
 	return;
 }
@@ -531,29 +532,15 @@ Image *SDLHardwareRenderDevice::loadImage(const std::string&filename, const std:
 	return image;
 }
 
-void SDLHardwareRenderDevice::windowResize() {
+void SDLHardwareRenderDevice::getWindowSize(short unsigned *screen_w, short unsigned *screen_h) {
 	int w,h;
 	SDL_GetWindowSize(window, &w, &h);
-	SCREEN_W = static_cast<unsigned short>(w);
-	SCREEN_H = static_cast<unsigned short>(h);
+	*screen_w = static_cast<unsigned short>(w);
+	*screen_h = static_cast<unsigned short>(h);
+}
 
-	for (size_t i = 0; i < VIRTUAL_HEIGHTS.size(); ++i) {
-		if (SCREEN_H >= VIRTUAL_HEIGHTS[i]) {
-			VIEW_H = VIRTUAL_HEIGHTS[i];
-		}
-	}
-
-	VIEW_H_HALF = VIEW_H / 2;
-
-	float scale = static_cast<float>(VIEW_H) / static_cast<float>(SCREEN_H);
-	VIEW_W = static_cast<unsigned short>(static_cast<float>(SCREEN_W) * scale);
-
-	// letterbox if too tall
-	if (VIEW_W < MIN_SCREEN_W) {
-		VIEW_W = MIN_SCREEN_W;
-	}
-
-	VIEW_W_HALF = VIEW_W/2;
+void SDLHardwareRenderDevice::windowResize() {
+	windowResizeInternal();
 
 	SDL_RenderSetLogicalSize(renderer, VIEW_W, VIEW_H);
 
@@ -562,4 +549,8 @@ void SDLHardwareRenderDevice::windowResize() {
 	SDL_SetRenderTarget(renderer, texture);
 
 	updateScreenVars();
+}
+
+void SDLHardwareRenderDevice::setBackgroundColor(Color color) {
+	background_color = color;
 }

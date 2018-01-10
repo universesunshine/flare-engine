@@ -125,6 +125,7 @@ unsigned short VIEW_W = 0;
 unsigned short VIEW_H = 0;
 unsigned short VIEW_W_HALF = 0;
 unsigned short VIEW_H_HALF = 0;
+float VIEW_SCALING = 1.0f;
 short MIN_SCREEN_W = 640;
 short MIN_SCREEN_H = 480;
 unsigned short SCREEN_W = 640;
@@ -164,6 +165,7 @@ bool MOUSE_AIM;
 bool NO_MOUSE;
 int JOY_DEADZONE;
 bool TOUCHSCREEN = false;
+bool MOUSE_SCALED = true;
 
 // Language Settings
 std::string LANGUAGE = "en";
@@ -187,17 +189,13 @@ int MAX_CRIT_DAMAGE;
 int MIN_OVERHIT_DAMAGE;
 int MAX_OVERHIT_DAMAGE;
 
-// Primary stats
+// Gameplay attribue definitions
 std::vector<PrimaryStat> PRIMARY_STATS;
-
-// Elemental types
 std::vector<Element> ELEMENTS;
-
-// Equipment flags
 std::vector<EquipFlag> EQUIP_FLAGS;
-
-// Hero classes
 std::vector<HeroClass> HERO_CLASSES;
+std::vector<DamageType> DAMAGE_TYPES;
+size_t DAMAGE_TYPES_COUNT;
 
 // Currency settings
 std::string CURRENCY;
@@ -329,6 +327,8 @@ void loadMiscSettings() {
 	ELEMENTS.clear();
 	EQUIP_FLAGS.clear();
 	HERO_CLASSES.clear();
+	DAMAGE_TYPES.clear();
+	DAMAGE_TYPES_COUNT = 0;
 	FRAME_W = 0;
 	FRAME_H = 0;
 	IGNORE_TEXTURE_FILTER = false;
@@ -744,6 +744,45 @@ void loadMiscSettings() {
 		HERO_CLASSES.push_back(c);
 	}
 
+	// @CLASS Settings: Damage Types|Description of engine/damage_types.txt
+	if (infile.open("engine/damage_types.txt")) {
+		while (infile.next()) {
+			if (infile.new_section) {
+				if (infile.section == "damage_type") {
+					// damage types must have a printable name
+					if (!DAMAGE_TYPES.empty() && DAMAGE_TYPES.back().name == "") {
+						DAMAGE_TYPES.pop_back();
+					}
+					DAMAGE_TYPES.resize(DAMAGE_TYPES.size()+1);
+				}
+			}
+
+			if (DAMAGE_TYPES.empty() || infile.section != "damage_type")
+				continue;
+
+			if (!DAMAGE_TYPES.empty()) {
+				// @ATTR damage_type.id|string|The identifier used for Item damage_type and Power base_damage.
+				if (infile.key == "id") DAMAGE_TYPES.back().id = infile.val;
+				// @ATTR damage_type.name|string|The displayed name for the value of this damage type.
+				else if (infile.key == "name") DAMAGE_TYPES.back().name = msg->get(infile.val);
+				// @ATTR damage_type.name_min|string|The displayed name for the minimum value of this damage type.
+				else if (infile.key == "name_min") DAMAGE_TYPES.back().name_min = msg->get(infile.val);
+				// @ATTR damage_type.name_max|string|The displayed name for the maximum value of this damage type.
+				else if (infile.key == "name_max") DAMAGE_TYPES.back().name_max = msg->get(infile.val);
+				// @ATTR damage_type.description|string|The description that will be displayed in the Character menu tooltips.
+				else if (infile.key == "description") DAMAGE_TYPES.back().description = msg->get(infile.val);
+				// @ATTR damage_type.min|string|The identifier used as a Stat type and an Effect type, for the minimum damage of this type.
+				else if (infile.key == "min") DAMAGE_TYPES.back().min = infile.val;
+				// @ATTR damage_type.max|string|The identifier used as a Stat type and an Effect type, for the maximum damage of this type.
+				else if (infile.key == "max") DAMAGE_TYPES.back().max = infile.val;
+
+				else infile.error("Settings: '%s' is not a valid key.", infile.key.c_str());
+			}
+		}
+		infile.close();
+	}
+	DAMAGE_TYPES_COUNT = DAMAGE_TYPES.size() * 2;
+
 	// @CLASS Settings: Death penalty|Description of engine/death_penalty.txt
 	if (infile.open("engine/death_penalty.txt")) {
 		while (infile.next()) {
@@ -860,6 +899,8 @@ bool saveSettings() {
 		if (outfile.bad()) logError("Settings: Unable to write settings file. No write access or disk is full!");
 		outfile.close();
 		outfile.clear();
+
+		PlatformFSCommit();
 	}
 	return true;
 }

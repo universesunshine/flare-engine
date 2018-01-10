@@ -33,7 +33,8 @@ Map::Map()
 	, w(1)
 	, h(1)
 	, hero_pos_enabled(false)
-	, hero_pos() {
+	, hero_pos()
+	, background_color(0,0,0,0) {
 }
 
 Map::~Map() {
@@ -165,6 +166,10 @@ void Map::loadHeader(FileParser &infile) {
 	else if (infile.key == "parallax_layers") {
 		// @ATTR parallax_layers|filename|Filename of a parallax layers definition.
 		parallax_filename = infile.val;
+	}
+	else if (infile.key == "background_color") {
+		// @ATTR background_color|color, int : Color, alpha|Background color for the map.
+		background_color = toRGBA(infile.val);
 	}
 	else if (infile.key == "tilewidth") {
 		// @ATTR tilewidth|int|Inherited from Tiled map file. Unused by engine.
@@ -379,8 +384,14 @@ int Map::addEventStatBlock(Event &evnt) {
 
 	Event_Component *ec_damage = evnt.getComponent(EC_POWER_DAMAGE);
 	if (ec_damage) {
-		statb->starting[STAT_DMG_MELEE_MIN] = statb->starting[STAT_DMG_RANGED_MIN] = statb->starting[STAT_DMG_MENT_MIN] = ec_damage->a;
-		statb->starting[STAT_DMG_MELEE_MAX] = statb->starting[STAT_DMG_RANGED_MAX] = statb->starting[STAT_DMG_MENT_MAX] = ec_damage->b;
+		for (size_t i = 0; i < DAMAGE_TYPES_COUNT; ++i) {
+			if (i % 2 == 0) {
+				statb->starting[STAT_COUNT + i] = ec_damage->a; // min
+			}
+			else {
+				statb->starting[STAT_COUNT + i] = ec_damage->b; // max
+			}
+		}
 	}
 
 	// this is used to store cooldown ticks for a map power

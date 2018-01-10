@@ -67,6 +67,17 @@ public:
 	HeroClass();
 };
 
+class DamageType {
+public:
+	std::string id;
+	std::string name;
+	std::string name_min;
+	std::string name_max;
+	std::string description;
+	std::string min;
+	std::string max;
+};
+
 // Path info
 extern std::string PATH_CONF; // user-configurable settings files
 extern std::string PATH_USER; // important per-user data (saves)
@@ -94,6 +105,7 @@ extern unsigned short VIEW_W;
 extern unsigned short VIEW_H;
 extern unsigned short VIEW_W_HALF;
 extern unsigned short VIEW_H_HALF;
+extern float VIEW_SCALING;
 extern unsigned short SCREEN_W;
 extern unsigned short SCREEN_H;
 extern short MIN_SCREEN_W;
@@ -115,6 +127,7 @@ extern bool MOUSE_AIM;
 extern bool NO_MOUSE;
 extern int JOY_DEADZONE;
 extern bool TOUCHSCREEN;
+extern bool MOUSE_SCALED; // mouse position is automatically scaled to VIEW_W x VIEW_H resolution
 
 // Interface Settings
 extern bool COMBAT_TEXT;
@@ -181,17 +194,13 @@ extern int MAX_CRIT_DAMAGE;
 extern int MIN_OVERHIT_DAMAGE;
 extern int MAX_OVERHIT_DAMAGE;
 
-// Primary stats
+// Gameplay attribue definitions
 extern std::vector<PrimaryStat> PRIMARY_STATS;
-
-// Elemental types
 extern std::vector<Element> ELEMENTS;
-
-// Equip flags
 extern std::vector<EquipFlag> EQUIP_FLAGS;
-
-// Hero classes
 extern std::vector<HeroClass> HERO_CLASSES;
+extern std::vector<DamageType> DAMAGE_TYPES;
+extern size_t DAMAGE_TYPES_COUNT; // DAMAGE_TYPES.size() * 2, to account for min & max
 
 // Currency settings
 extern std::string CURRENCY;

@@ -283,7 +283,7 @@ void NPC::loadGraphics() {
 
 /**
  * filename assumes the file is in soundfx/npcs/
- * type is a const int enum, see NPC.h
+ * vox_type is a const int enum, see NPC.h
  * returns -1 if not loaded or error.
  * returns index in specific vector where to be found.
  */
@@ -324,7 +324,7 @@ void NPC::logic() {
 }
 
 /**
- * type is a const int enum, see NPC.h
+ * vox_type is a const int enum, see NPC.h
  */
 bool NPC::playSound(int vox_type, int id) {
 	if (vox_type == NPC_VOX_INTRO) {

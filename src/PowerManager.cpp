@@ -163,6 +163,7 @@ void PowerManager::loadPowers() {
 				powers.resize(input_id + 1);
 
 			clear_post_effects = true;
+			powers[input_id].is_empty = false;
 
 			continue;
 		}
@@ -256,9 +257,11 @@ void PowerManager::loadPowers() {
 		else if (infile.key == "sacrifice")
 			// @ATTR power.sacrifice|bool|If the power has requires_hp, allow it to kill the caster.
 			powers[input_id].sacrifice = toBool(infile.val);
-		else if (infile.key == "requires_los")
+		else if (infile.key == "requires_los") {
 			// @ATTR power.requires_los|bool|Requires a line-of-sight to target.
 			powers[input_id].requires_los = toBool(infile.val);
+			powers[input_id].requires_los_default = false;
+		}
 		else if (infile.key == "requires_empty_target")
 			// @ATTR power.requires_empty_target|bool|The power can only be cast when target tile is empty.
 			powers[input_id].requires_empty_target = toBool(infile.val);
@@ -290,9 +293,15 @@ void PowerManager::loadPowers() {
 		// animation info
 		else if (infile.key == "animation") {
 			// @ATTR power.animation|filename|The filename of the power animation.
-			powers[input_id].animation_name = infile.val;
-			anim->increaseCount(powers[input_id].animation_name);
-			anim->getAnimationSet(powers[input_id].animation_name)->getAnimation("");
+			if (!powers[input_id].animation_name.empty()) {
+				anim->decreaseCount(powers[input_id].animation_name);
+				powers[input_id].animation_name.clear();
+			}
+			if (!infile.val.empty()) {
+				powers[input_id].animation_name = infile.val;
+				anim->increaseCount(powers[input_id].animation_name);
+				anim->getAnimationSet(powers[input_id].animation_name)->getAnimation("");
+			}
 		}
 		else if (infile.key == "soundfx")
 			// @ATTR power.soundfx|filename|Filename of a sound effect to play when the power is used.
@@ -351,12 +360,17 @@ void PowerManager::loadPowers() {
 			// @ATTR power.radius|float|Radius in pixels
 			powers[input_id].radius = toFloat(infile.val);
 		else if (infile.key == "base_damage") {
-			// @ATTR power.base_damage|["melee", "ranged", "ment"]|Determines which of the three primary damage stats will be used to calculate damage.
-			if (infile.val == "none")        powers[input_id].base_damage = BASE_DAMAGE_NONE;
-			else if (infile.val == "melee")  powers[input_id].base_damage = BASE_DAMAGE_MELEE;
-			else if (infile.val == "ranged") powers[input_id].base_damage = BASE_DAMAGE_RANGED;
-			else if (infile.val == "ment")   powers[input_id].base_damage = BASE_DAMAGE_MENT;
-			else infile.error("PowerManager: Unknown base_damage '%s'", infile.val.c_str());
+			// @ATTR power.base_damage|predefined_string : Damage type ID|Determines which damage stat will be used to calculate damage.
+			for (size_t i = 0; i < DAMAGE_TYPES.size(); ++i) {
+				if (infile.val == DAMAGE_TYPES[i].id) {
+					powers[input_id].base_damage = i;
+					break;
+				}
+			}
+
+			if (powers[input_id].base_damage == DAMAGE_TYPES.size()) {
+				infile.error("PowerManager: Unknown base_damage '%s'", infile.val.c_str());
+			}
 		}
 		else if (infile.key == "starting_pos") {
 			// @ATTR power.starting_pos|["source", "target", "melee"]|Start position for hazard
@@ -643,10 +657,12 @@ void PowerManager::loadPowers() {
 			powers[input_id].remove_effects.push_back(std::pair<std::string, int>(first, second));
 		}
 		else if (infile.key == "replace_by_effect") {
-			// @ATTR power.replace_by_effect|int, predefined_string, int : Power ID, Effect ID, Number of Effect instances|If the caster has at least the number of instances of the Effect ID, the defined Power ID will be cast instead.
-			powers[input_id].replace_by_effect_power = popFirstInt(infile.val);
-			powers[input_id].replace_by_effect_id = popFirstString(infile.val);
-			powers[input_id].replace_by_effect_count = popFirstInt(infile.val);
+			// @ATTR power.replace_by_effect|repeatable(int, predefined_string, int) : Power ID, Effect ID, Number of Effect instances|If the caster has at least the number of instances of the Effect ID, the defined Power ID will be cast instead.
+			PowerReplaceByEffect prbe;
+			prbe.power_id = popFirstInt(infile.val);
+			prbe.effect_id = popFirstString(infile.val);
+			prbe.count = popFirstInt(infile.val);
+			powers[input_id].replace_by_effect.push_back(prbe);
 		}
 		else if (infile.key == "requires_corpse") {
 			// @ATTR power.requires_corpse|["consume", bool]|If true, a corpse must be targeted for this power to be used. If "consume", then the corpse is also consumed on Power use.
@@ -683,6 +699,13 @@ bool PowerManager::isValidEffect(const std::string& type) {
 
 	for (size_t i = 0; i < PRIMARY_STATS.size(); ++i) {
 		if (type == PRIMARY_STATS[i].id)
+			return true;
+	}
+
+	for (size_t i = 0; i < DAMAGE_TYPES.size(); ++i) {
+		if (type == DAMAGE_TYPES[i].min)
+			return true;
+		else if (type == DAMAGE_TYPES[i].max)
 			return true;
 	}
 
@@ -782,21 +805,10 @@ void PowerManager::initHazard(int power_index, StatBlock *src_stats, const FPoin
 
 	// If the hazard's damage isn't default (0), we are applying an item-based power mod.
 	// We don't allow equipment power mods to alter damage (mainly to preserve the base power's multiplier).
-	if (haz->dmg_max == 0) {
-
+	if (haz->dmg_max == 0 && powers[power_index].base_damage != DAMAGE_TYPES.size()) {
 		// base damage is by equipped item
-		if (powers[power_index].base_damage == BASE_DAMAGE_MELEE) {
-			haz->dmg_min = src_stats->get(STAT_DMG_MELEE_MIN);
-			haz->dmg_max = src_stats->get(STAT_DMG_MELEE_MAX);
-		}
-		else if (powers[power_index].base_damage == BASE_DAMAGE_RANGED) {
-			haz->dmg_min = src_stats->get(STAT_DMG_RANGED_MIN);
-			haz->dmg_max = src_stats->get(STAT_DMG_RANGED_MAX);
-		}
-		else if (powers[power_index].base_damage == BASE_DAMAGE_MENT) {
-			haz->dmg_min = src_stats->get(STAT_DMG_MENT_MIN);
-			haz->dmg_max = src_stats->get(STAT_DMG_MENT_MAX);
-		}
+		haz->dmg_min = src_stats->getDamageMin(powers[power_index].base_damage);
+		haz->dmg_max = src_stats->getDamageMax(powers[power_index].base_damage);
 	}
 
 	// animation properties
@@ -962,21 +974,27 @@ bool PowerManager::effect(StatBlock *src_stats, StatBlock *caster_stats, int pow
 			effect_data = (*effect_ptr);
 
 			if (effect_data.type == "shield") {
+				if (powers[power_index].base_damage == DAMAGE_TYPES.size())
+					continue;
+
 				// charge shield to max ment weapon damage * damage multiplier
 				if(powers[power_index].mod_damage_mode == STAT_MODIFIER_MODE_MULTIPLY)
-					magnitude = caster_stats->get(STAT_DMG_MENT_MAX) * powers[power_index].mod_damage_value_min / 100;
+					magnitude = caster_stats->getDamageMax(powers[power_index].base_damage) * powers[power_index].mod_damage_value_min / 100;
 				else if(powers[power_index].mod_damage_mode == STAT_MODIFIER_MODE_ADD)
-					magnitude = caster_stats->get(STAT_DMG_MENT_MAX) + powers[power_index].mod_damage_value_min;
+					magnitude = caster_stats->getDamageMax(powers[power_index].base_damage) + powers[power_index].mod_damage_value_min;
 				else if(powers[power_index].mod_damage_mode == STAT_MODIFIER_MODE_ABSOLUTE)
 					magnitude = randBetween(powers[power_index].mod_damage_value_min, powers[power_index].mod_damage_value_max);
 				else
-					magnitude = caster_stats->get(STAT_DMG_MENT_MAX);
+					magnitude = caster_stats->getDamageMax(powers[power_index].base_damage);
 
 				comb->addString(msg->get("+%d Shield",magnitude), src_stats->pos, COMBAT_MESSAGE_BUFF);
 			}
 			else if (effect_data.type == "heal") {
+				if (powers[power_index].base_damage == DAMAGE_TYPES.size())
+					continue;
+
 				// heal for ment weapon damage * damage multiplier
-				magnitude = randBetween(caster_stats->get(STAT_DMG_MENT_MIN), caster_stats->get(STAT_DMG_MENT_MAX));
+				magnitude = randBetween(caster_stats->getDamageMin(powers[power_index].base_damage), caster_stats->getDamageMax(powers[power_index].base_damage));
 
 				if(powers[power_index].mod_damage_mode == STAT_MODIFIER_MODE_MULTIPLY)
 					magnitude = magnitude * powers[power_index].mod_damage_value_min / 100;
@@ -1304,10 +1322,10 @@ bool PowerManager::activate(int power_index, StatBlock *src_stats, const FPoint&
 	if (static_cast<unsigned>(power_index) >= powers.size())
 		return false;
 
-	if (powers[power_index].replace_by_effect_power > 0 &&
-	    src_stats->effects.hasEffect(powers[power_index].replace_by_effect_id, powers[power_index].replace_by_effect_count))
-	{
-		return activate(powers[power_index].replace_by_effect_power, src_stats, target);
+	for (size_t i = 0; i < powers[power_index].replace_by_effect.size(); ++i) {
+		if (src_stats->effects.hasEffect(powers[power_index].replace_by_effect[i].effect_id, powers[power_index].replace_by_effect[i].count)) {
+			return activate(powers[power_index].replace_by_effect[i].power_id, src_stats, target);
+		}
 	}
 
 	if (src_stats->hero) {

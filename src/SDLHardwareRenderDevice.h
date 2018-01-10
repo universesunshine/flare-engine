@@ -77,6 +77,7 @@ public:
 	void commitFrame();
 	void destroyContext();
 	void windowResize();
+	void setBackgroundColor(Color color);
 	Image *createImage(int width, int height);
 	void setGamma(float g);
 	void resetGamma();
@@ -87,12 +88,14 @@ public:
 					 bool IfNotFoundExit = false);
 private:
 	void drawLine(int x0, int y0, int x1, int y1, const Color& color);
+	void getWindowSize(short unsigned *screen_w, short unsigned *screen_h);
 
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	SDL_Texture *texture;
 	SDL_Surface* titlebar_icon;
 	char* title;
+	Color background_color;
 };
 
 #endif

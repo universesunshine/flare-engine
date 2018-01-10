@@ -213,6 +213,7 @@ public:
 	virtual void drawPixel(int x, int y, const Color& color) = 0;
 	virtual void drawRectangle(const Point& p0, const Point& p1, const Color& color) = 0;
 	virtual void windowResize() = 0;
+	virtual void setBackgroundColor(Color color);
 
 	bool reloadGraphics();
 
@@ -225,6 +226,7 @@ protected:
 	void cacheStore(const std::string &filename, Image *);
 	void cacheRemove(Image *image);
 	void cacheRemoveAll();
+	void windowResizeInternal();
 
 	bool fullscreen;
 	bool hwsurface;
@@ -250,6 +252,7 @@ private:
 	IMAGE_CACHE_CONTAINER cache;
 
 	virtual void drawLine(int x0, int y0, int x1, int y1, const Color& color) = 0;
+	virtual void getWindowSize(short unsigned *screen_w, short unsigned *screen_h) = 0;
 };
 
 #endif // RENDERDEVICE_H

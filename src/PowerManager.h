@@ -32,8 +32,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "MapCollision.h"
 #include "MapRenderer.h"
 #include "Map.h"
-
-#include <cassert>
+#include "Settings.h"
 
 class AnimationSet;
 class Hazard;
@@ -48,11 +47,6 @@ const int POWTYPE_BLOCK = 6;
 
 const int POWSTATE_INSTANT = 1;
 const int POWSTATE_ATTACK = 2;
-
-const int BASE_DAMAGE_NONE = 0;
-const int BASE_DAMAGE_MELEE = 1;
-const int BASE_DAMAGE_RANGED = 2;
-const int BASE_DAMAGE_MENT = 3;
 
 // when casting a spell/power, the hazard starting position is
 // either the source (the avatar or enemy), the target (mouse click position),
@@ -110,9 +104,17 @@ public:
 	}
 };
 
+class PowerReplaceByEffect {
+public:
+	int power_id;
+	int count;
+	std::string effect_id;
+};
+
 class Power {
 public:
 	// base info
+	bool is_empty;
 	int type; // what kind of activate() this is
 	std::string name;
 	std::string description;
@@ -135,6 +137,7 @@ public:
 	int requires_hp;
 	bool sacrifice;
 	bool requires_los; // line of sight
+	bool requires_los_default;
 	bool requires_empty_target; // target square must be empty
 	int requires_item;
 	int requires_item_quantity;
@@ -165,7 +168,7 @@ public:
 	bool use_hazard;
 	bool no_attack;
 	float radius;
-	int base_damage; // enum.  damage is powered by melee, ranged, mental weapon
+	size_t base_damage;
 	int starting_pos; // enum. (source, target, or melee)
 	bool relative_pos;
 	bool multitarget;
@@ -251,9 +254,7 @@ public:
 
 	std::vector< std::pair<std::string, int> > remove_effects;
 
-	int replace_by_effect_power;
-	std::string replace_by_effect_id;
-	int replace_by_effect_count;
+	std::vector<PowerReplaceByEffect> replace_by_effect;
 
 	bool requires_corpse;
 	bool remove_corpse;
@@ -261,7 +262,8 @@ public:
 	float target_nearest;
 
 	Power()
-		: type(-1)
+		: is_empty(true)
+		, type(-1)
 		, name("")
 		, description("")
 		, icon(-1)
@@ -281,6 +283,7 @@ public:
 		, requires_hp(0)
 		, sacrifice(false)
 		, requires_los(false)
+		, requires_los_default(true)
 		, requires_empty_target(false)
 		, requires_item(-1)
 		, requires_item_quantity(0)
@@ -309,7 +312,7 @@ public:
 		, use_hazard(false)
 		, no_attack(false)
 		, radius(0)
-		, base_damage(BASE_DAMAGE_NONE)
+		, base_damage(DAMAGE_TYPES.size())
 		, starting_pos(STARTING_POS_SOURCE)
 		, relative_pos(false)
 		, multitarget(false)
@@ -382,9 +385,7 @@ public:
 
 		, remove_effects()
 
-		, replace_by_effect_power(0)
-		, replace_by_effect_id("")
-		, replace_by_effect_count(0)
+		, replace_by_effect()
 
 		, requires_corpse(false)
 		, remove_corpse(false)

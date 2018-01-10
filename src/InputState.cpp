@@ -25,6 +25,7 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 
 #include "FileParser.h"
 #include "InputState.h"
+#include "Platform.h"
 #include "Settings.h"
 #include "SharedResources.h"
 #include "UtilsParsing.h"
@@ -214,6 +215,8 @@ void InputState::saveKeyBindings() {
 		if (outfile.bad()) logError("InputState: Unable to write keybindings config file. No write access or disk is full!");
 		outfile.close();
 		outfile.clear();
+
+		PlatformFSCommit();
 	}
 
 }
@@ -331,4 +334,18 @@ void InputState::setKeybindNames() {
 
 void InputState::enableEventLog() {
 	dump_event = true;
+}
+
+Point InputState::scaleMouse(unsigned int x, unsigned int y) {
+	if (MOUSE_SCALED) {
+		return Point(x,y);
+	}
+
+	Point scaled_mouse;
+	int offsetY = static_cast<int>(((SCREEN_H - VIEW_H / VIEW_SCALING) / 2) * VIEW_SCALING);
+
+	scaled_mouse.x = static_cast<int>(static_cast<float>(x) * VIEW_SCALING);
+	scaled_mouse.y = static_cast<int>(static_cast<float>(y) * VIEW_SCALING) - offsetY;
+
+	return scaled_mouse;
 }

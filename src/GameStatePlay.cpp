@@ -63,6 +63,8 @@ FLARE.  If not, see http://www.gnu.org/licenses/
 #include "MenuPowers.h"
 #include "SaveLoad.h"
 
+#include <cassert>
+
 GameStatePlay::GameStatePlay()
 	: GameState()
 	, enemy(NULL)
@@ -300,12 +302,14 @@ void GameStatePlay::checkTeleport() {
 		mapr->collider.unblock(pc->stats.pos.x, pc->stats.pos.y);
 
 		if (mapr->teleportation) {
-			mapr->cam.x = pc->stats.pos.x = mapr->teleport_destination.x;
-			mapr->cam.y = pc->stats.pos.y = mapr->teleport_destination.y;
+			// camera gets interpolated movement during intramap teleport
+			// during intermap teleport, we set the camera to the player position
+			pc->stats.pos.x = mapr->teleport_destination.x;
+			pc->stats.pos.y = mapr->teleport_destination.y;
 		}
 		else {
-			mapr->cam.x = pc->stats.pos.x = pc->stats.teleport_destination.x;
-			mapr->cam.y = pc->stats.pos.y = pc->stats.teleport_destination.y;
+			pc->stats.pos.x = pc->stats.teleport_destination.x;
+			pc->stats.pos.y = pc->stats.teleport_destination.y;
 		}
 
 		// if we're not changing map, move allies to a the player's new position
@@ -323,6 +327,8 @@ void GameStatePlay::checkTeleport() {
 
 		// process intermap teleport
 		if (mapr->teleportation && !mapr->teleport_mapname.empty()) {
+			mapr->cam.x = pc->stats.pos.x;
+			mapr->cam.y = pc->stats.pos.y;
 			std::string teleport_mapname = mapr->teleport_mapname;
 			mapr->teleport_mapname = "";
 			inpt->lock_all = (teleport_mapname == "maps/spawn.txt");
@@ -374,6 +380,12 @@ void GameStatePlay::checkTeleport() {
 			mapr->executeOnLoadEvents();
 			if (mapr->teleportation)
 				on_load_teleport = true;
+		}
+
+		if (mapr->collider.is_outside_map(pc->stats.pos.x, pc->stats.pos.y)) {
+			logError("GameStatePlay: Teleport position is outside of map bounds.");
+			pc->stats.pos.x = 0.5f;
+			pc->stats.pos.y = 0.5f;
 		}
 
 		mapr->collider.block(pc->stats.pos.x, pc->stats.pos.y, false);

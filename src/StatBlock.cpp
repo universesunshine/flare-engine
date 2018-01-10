@@ -70,10 +70,10 @@ StatBlock::StatBlock()
 	, check_title(false)
 	, stat_points_per_level(1)
 	, power_points_per_level(1)
-	, starting(std::vector<int>(STAT_COUNT,0))
-	, base(std::vector<int>(STAT_COUNT,0))
-	, current(std::vector<int>(STAT_COUNT,0))
-	, per_level(std::vector<int>(STAT_COUNT,0))
+	, starting(std::vector<int>(STAT_COUNT + DAMAGE_TYPES_COUNT, 0))
+	, base(std::vector<int>(STAT_COUNT + DAMAGE_TYPES_COUNT, 0))
+	, current(std::vector<int>(STAT_COUNT + DAMAGE_TYPES_COUNT, 0))
+	, per_level(std::vector<int>(STAT_COUNT + DAMAGE_TYPES_COUNT, 0))
 	, character_class("")
 	, character_subclass("")
 	, hp(0)
@@ -81,12 +81,8 @@ StatBlock::StatBlock()
 	, mp(0)
 	, mp_ticker(0)
 	, speed_default(0.1f)
-	, dmg_melee_min_add(0)
-	, dmg_melee_max_add(0)
-	, dmg_ment_min_add(0)
-	, dmg_ment_max_add(0)
-	, dmg_ranged_min_add(0)
-	, dmg_ranged_max_add(0)
+	, dmg_min_add(std::vector<int>(DAMAGE_TYPES.size(), 0))
+	, dmg_max_add(std::vector<int>(DAMAGE_TYPES.size(), 0))
 	, absorb_min_add(0)
 	, absorb_max_add(0)
 	, speed(0.1f)
@@ -157,10 +153,10 @@ StatBlock::StatBlock()
 	, animations("")
 	, sfx_attack()
 	, sfx_step("")
-	, sfx_hit("")
-	, sfx_die("")
-	, sfx_critdie("")
-	, sfx_block("")
+	, sfx_hit()
+	, sfx_die()
+	, sfx_critdie()
+	, sfx_block()
 	, sfx_levelup("")
 	, max_spendable_stat_points(0)
 	, max_points_per_stat(0)
@@ -177,7 +173,7 @@ StatBlock::StatBlock()
 	per_primary.resize(PRIMARY_STATS.size());
 
 	for (size_t i = 0; i < per_primary.size(); ++i) {
-		per_primary[i].resize(STAT_COUNT, 0);
+		per_primary[i].resize(STAT_COUNT + DAMAGE_TYPES_COUNT, 0);
 	}
 }
 
@@ -205,9 +201,20 @@ bool StatBlock::loadCoreStat(FileParser *infile) {
 		std::string stat = popFirstString(infile->val);
 		int value = popFirstInt(infile->val);
 
-		for (unsigned i=0; i<STAT_COUNT; i++) {
+		for (size_t i=0; i<STAT_COUNT; ++i) {
 			if (STAT_KEY[i] == stat) {
 				starting[i] = value;
+				return true;
+			}
+		}
+
+		for (size_t i = 0; i < DAMAGE_TYPES.size(); ++i) {
+			if (DAMAGE_TYPES[i].min == stat) {
+				starting[STAT_COUNT + (i*2)] = value;
+				return true;
+			}
+			else if (DAMAGE_TYPES[i].max == stat) {
+				starting[STAT_COUNT + (i*2) + 1] = value;
 				return true;
 			}
 		}
@@ -223,6 +230,17 @@ bool StatBlock::loadCoreStat(FileParser *infile) {
 				return true;
 			}
 		}
+
+		for (size_t i = 0; i < DAMAGE_TYPES.size(); ++i) {
+			if (DAMAGE_TYPES[i].min == stat) {
+				per_level[STAT_COUNT + (i*2)] = value;
+				return true;
+			}
+			else if (DAMAGE_TYPES[i].max == stat) {
+				per_level[STAT_COUNT + (i*2) + 1] = value;
+				return true;
+			}
+		}
 	}
 	else if (infile->key == "stat_per_primary") {
 		// @ATTR stat_per_primary|predefined_string, predefined_string, int : Primary Stat, Stat name, Value|The value for this stat added for every point allocated to this primary stat.
@@ -235,6 +253,17 @@ bool StatBlock::loadCoreStat(FileParser *infile) {
 		for (unsigned i=0; i<STAT_COUNT; i++) {
 			if (STAT_KEY[i] == stat) {
 				per_primary[prim_stat_index][i] = value;
+				return true;
+			}
+		}
+
+		for (size_t i = 0; i < DAMAGE_TYPES.size(); ++i) {
+			if (DAMAGE_TYPES[i].min == stat) {
+				per_primary[prim_stat_index][STAT_COUNT + (i*2)] = value;
+				return true;
+			}
+			else if (DAMAGE_TYPES[i].max == stat) {
+				per_primary[prim_stat_index][STAT_COUNT + (i*2) + 1] = value;
 				return true;
 			}
 		}
@@ -270,35 +299,69 @@ bool StatBlock::loadCoreStat(FileParser *infile) {
 bool StatBlock::loadSfxStat(FileParser *infile) {
 	// @CLASS StatBlock: Sound effects|Description of heroes in engine/avatar/ and enemies in enemies/
 
-	// @ATTR sfx_attack|predefined_string, filename : Animation name, Sound file|Filename of sound effect for the specified attack animation.
+	if (infile->new_section) {
+		sfx_attack.clear();
+		sfx_hit.clear();
+		sfx_die.clear();
+		sfx_critdie.clear();
+		sfx_block.clear();
+	}
+
 	if (infile->key == "sfx_attack") {
+		// @ATTR sfx_attack|repeatable(predefined_string, filename) : Animation name, Sound file|Filename of sound effect for the specified attack animation.
 		std::string anim_name = popFirstString(infile->val);
 		std::string filename = popFirstString(infile->val);
 
-		bool found_anim_name = false;
+		size_t found_index = sfx_attack.size();
 		for (size_t i = 0; i < sfx_attack.size(); ++i) {
 			if (anim_name == sfx_attack[i].first) {
-				sfx_attack[i].second = filename;
-				found_anim_name = true;
+				found_index = i;
 				break;
 			}
 		}
 
-		if (!found_anim_name) {
-			sfx_attack.push_back(std::pair<std::string, std::string>(anim_name, filename));
+		if (found_index == sfx_attack.size()) {
+			sfx_attack.push_back(std::pair<std::string, std::vector<std::string> >());
+			sfx_attack.back().first = anim_name;
+			sfx_attack.back().second.push_back(filename);
+		}
+		else {
+			if (std::find(sfx_attack[found_index].second.begin(), sfx_attack[found_index].second.end(), filename) == sfx_attack[found_index].second.end()) {
+				sfx_attack[found_index].second.push_back(filename);
+			}
 		}
 	}
-	// @ATTR sfx_hit|filename|Filename of sound effect for being hit.
-	else if (infile->key == "sfx_hit") sfx_hit = infile->val;
-	// @ATTR sfx_die|filename|Filename of sound effect for dying.
-	else if (infile->key == "sfx_die") sfx_die = infile->val;
-	// @ATTR sfx_critdie|filename|Filename of sound effect for dying to a critical hit.
-	else if (infile->key == "sfx_critdie") sfx_critdie = infile->val;
-	// @ATTR sfx_block|filename|Filename of sound effect for blocking an incoming hit.
-	else if (infile->key == "sfx_block") sfx_block = infile->val;
-	// @ATTR sfx_levelup|filename|Filename of sound effect for leveling up.
-	else if (infile->key == "sfx_levelup") sfx_levelup = infile->val;
-	else return false;
+	else if (infile->key == "sfx_hit") {
+		// @ATTR sfx_hit|repeatable(filename)|Filename of sound effect for being hit.
+		if (std::find(sfx_hit.begin(), sfx_hit.end(), infile->val) == sfx_hit.end()) {
+			sfx_hit.push_back(infile->val);
+		}
+	}
+	else if (infile->key == "sfx_die") {
+		// @ATTR sfx_die|repeatable(filename)|Filename of sound effect for dying.
+		if (std::find(sfx_die.begin(), sfx_die.end(), infile->val) == sfx_die.end()) {
+			sfx_die.push_back(infile->val);
+		}
+	}
+	else if (infile->key == "sfx_critdie") {
+		// @ATTR sfx_critdie|repeatable(filename)|Filename of sound effect for dying to a critical hit.
+		if (std::find(sfx_critdie.begin(), sfx_critdie.end(), infile->val) == sfx_critdie.end()) {
+			sfx_critdie.push_back(infile->val);
+		}
+	}
+	else if (infile->key == "sfx_block") {
+		// @ATTR sfx_block|repeatable(filename)|Filename of sound effect for blocking an incoming hit.
+		if (std::find(sfx_block.begin(), sfx_block.end(), infile->val) == sfx_block.end()) {
+			sfx_block.push_back(infile->val);
+		}
+	}
+	else if (infile->key == "sfx_levelup") {
+		// @ATTR sfx_levelup|filename|Filename of sound effect for leveling up.
+		sfx_levelup = infile->val;
+	}
+	else {
+		return false;
+	}
 
 	return true;
 }
@@ -567,7 +630,7 @@ void StatBlock::calcBase() {
 	// bonuses are skipped for the default level 1 of a stat
 	int lev0 = std::max(level - 1, 0);
 
-	for (int i = 0; i < STAT_COUNT; ++i) {
+	for (size_t i = 0; i < STAT_COUNT + DAMAGE_TYPES_COUNT; ++i) {
 		base[i] = starting[i];
 		base[i] += lev0 * per_level[i];
 		for (size_t j = 0; j < per_primary.size(); ++j) {
@@ -575,23 +638,27 @@ void StatBlock::calcBase() {
 		}
 	}
 
-	// add damage/absorb from equipment
-	base[STAT_DMG_MELEE_MIN] += dmg_melee_min_add;
-	base[STAT_DMG_MELEE_MAX] += dmg_melee_max_add;
-	base[STAT_DMG_MENT_MIN] += dmg_ment_min_add;
-	base[STAT_DMG_MENT_MAX] += dmg_ment_max_add;
-	base[STAT_DMG_RANGED_MIN] += dmg_ranged_min_add;
-	base[STAT_DMG_RANGED_MAX] += dmg_ranged_max_add;
+	// add damage from equipment and increase to minimum amounts
+	// for (size_t i = 0; i < DAMAGE_TYPES_COUNT; ++i) {
+	// 	size_t dmg_id = i / 2;
+    //
+	// 	if (i % 2 == 0) {
+	// 		base[STAT_COUNT + i] += dmg_min_add[dmg_id];
+	// 	}
+	// 	else {
+	// 		base[STAT_COUNT + i] += dmg_max_add[dmg_id];
+	// 	}
+	// }
+	for (size_t i = 0; i < DAMAGE_TYPES.size(); ++i) {
+		base[STAT_COUNT + (i*2)] += dmg_min_add[i];
+		base[STAT_COUNT + (i*2) + 1] += dmg_max_add[i];
+		base[STAT_COUNT + (i*2)] = std::max(base[STAT_COUNT + (i*2)], 0);
+		base[STAT_COUNT + (i*2) + 1] = std::max(base[STAT_COUNT + (i*2) + 1], base[STAT_COUNT + (i*2)]);
+	}
+
+	// add absorb from equipment and increase to minimum amounts
 	base[STAT_ABS_MIN] += absorb_min_add;
 	base[STAT_ABS_MAX] += absorb_max_add;
-
-	// increase damage and absorb to minimum amounts
-	base[STAT_DMG_MELEE_MIN] = std::max(base[STAT_DMG_MELEE_MIN], 0);
-	base[STAT_DMG_MELEE_MAX] = std::max(base[STAT_DMG_MELEE_MAX], base[STAT_DMG_MELEE_MIN]);
-	base[STAT_DMG_RANGED_MIN] = std::max(base[STAT_DMG_RANGED_MIN], 0);
-	base[STAT_DMG_RANGED_MAX] = std::max(base[STAT_DMG_RANGED_MAX], base[STAT_DMG_RANGED_MIN]);
-	base[STAT_DMG_MENT_MIN] = std::max(base[STAT_DMG_MENT_MIN], 0);
-	base[STAT_DMG_MENT_MAX] = std::max(base[STAT_DMG_MENT_MAX], base[STAT_DMG_MENT_MIN]);
 	base[STAT_ABS_MIN] = std::max(base[STAT_ABS_MIN], 0);
 	base[STAT_ABS_MAX] = std::max(base[STAT_ABS_MAX], base[STAT_ABS_MIN]);
 }
@@ -618,7 +685,7 @@ void StatBlock::applyEffects() {
 
 	calcBase();
 
-	for (int i=0; i<STAT_COUNT; i++) {
+	for (size_t i=0; i<STAT_COUNT + DAMAGE_TYPES_COUNT; i++) {
 		current[i] = base[i] + effects.bonus[i];
 	}
 
@@ -1058,3 +1125,4 @@ bool StatBlock::checkRequiredSpawns(int req_amount) const {
 
 	return true;
 }
+
