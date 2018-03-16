@@ -1,3 +1,9 @@
+env:
+  global:
+    # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
+    #   via the "travis encrypt" command using the project repo's public key
+    - secure: "ABIe/8xF0VMKO6IGZq41eJStRFcHhzg5QY+nQslJ4kPbawNNtyoemf1LCx9VQmFLJ5KGQLMXReBViIWnOrOj8C7PyPljSFgibA9NUOa4tyeErER5buFUHRZQFQ+/8wh7Z7lTxYvZigsYr+3rNRzB4yg1PcCkloOdr15UHPzQe3qAYbm2cPB2gGVuoiDRVtd1DI9tVU9IBTg2D9sbJgAFtwPy4HbEXpENiUOlmKC/tGCmWif1J7CwyppL7Tgnmj0rFfozjjsncKyla8Amy3+0rEtots+Q4cg1nTWDFTWg7kPFIBE0ksq4i7YTcY7FbnYCaRllw1qX/1h4fKhOXEvct+mjmmLTOTfKnT7VXN0Tf7Zfvr7Fwpy54W+ErlfcM0DJ7EmyeSANWgk8Q8vDhkakrzMHvzgmytWT5DS2r9o+saIlSx67i2OIg5JEIITd97LBrb6QEpbeSHA29igIXrGng+pZM3K1kN/gvk21TdwLPpHxba8iNtB4neeySfpsi+9NjMJ/NioBIu/N/BiMjaK+8JYVupFSyEHdVwv1eD5TFuFQZtEy2m+ETpAaMpOvA2S0RevMJqE0b1oaRreCNgqhHVSfVjtA3AfM7U5taJyKlSiHstDzP3NVyenUbzcLFQdRPEAjsdS4pqMVbd7/4i+JiSzMlFKiBeWMIeXpfJRTw7g="
+
 language: cpp
 compiler:
   - gcc
@@ -7,15 +13,25 @@ before_install:
   - sudo apt-get clean -qq
   - sudo apt-get update -qq
   - sudo apt-get install -qq libegl1-mesa-dev libgles2-mesa-dev libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev cppcheck
+  - echo -n | openssl s_client -connect "https://scan.coverity.com:443" | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
 script: cmake . && make
 after_script: cppcheck --quiet --verbose --enable=all `git ls-files src/\*.cpp`
 notifications:
   irc:
-    channels:
-      - "irc.freenode.org#flarerpg"
-    on_success: always
-    on_failure: always
-    use_notice: true
-    skip_join: true
-    template:
-      - "%{repository} (%{commit}) : %{message} %{build_url}"
+  channels:
+    - "irc.freenode.org#flarerpg"
+  on_success: always
+  on_failure: always
+  use_notice: true
+  skip_join: true
+  template:
+    - "%{repository} (%{commit}) : %{message} %{build_url}"
+addons:
+  coverity_scan:
+    project:
+      name: "dorkster/flare-engine"
+      description: "Flare: Free/Libre Action RPG Engine"
+      notification_email: jajdorkster@gmail.com
+      # build_command_prepend: ""
+      build_command: "cmake . && make"
+      branch_pattern: coverity_scan
